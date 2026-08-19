@@ -47,15 +47,15 @@ function App() {
           <div className="absolute right-[-10%] top-[30%] h-[28rem] w-[28rem] rounded-full bg-cyan-500/5 blur-[120px]" />
         </div>
 
-        <div className="relative mx-auto flex max-w-[1400px] justify-center gap-6 px-4 py-12 sm:px-6 md:py-16">
+        <div className="relative mx-auto flex min-h-screen max-w-[1400px] items-center justify-center gap-6 px-4 py-12 sm:px-6 md:py-16">
           <AdRail side="left" />
 
-          <main className="flex w-full max-w-2xl flex-col gap-8">
-            <header className="text-center">
-              <h1 className="text-balance bg-gradient-to-b from-white to-slate-400 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent sm:text-4xl">
+          <main className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center gap-8 text-center">
+            <header className="w-full text-center">
+              <h1 className="text-balance bg-gradient-to-b from-white to-slate-400 bg-clip-text text-4xl font-extrabold leading-tight tracking-tight text-transparent sm:text-5xl md:text-6xl">
                 Minecraft Block <span className="text-emerald-400">→</span> 3D Megablock Generator
               </h1>
-              <p className="mx-auto mt-3 max-w-md text-sm text-slate-400">
+              <p className="mx-auto mt-4 max-w-lg text-base text-slate-400 sm:text-lg">
                 Upload your resource pack, pick a block, and build a giant pixel-art megablock out of real vanilla
                 materials.
               </p>

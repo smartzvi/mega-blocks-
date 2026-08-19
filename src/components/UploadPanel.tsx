@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { loadArchive } from '../lib/zip/loadArchive';
 import { extractTextures } from '../lib/zip/extractTextures';
 import { buildPalette } from '../lib/palette/buildPalette';
@@ -17,6 +17,7 @@ export function UploadPanel() {
   const state = useAppState();
   const dispatch = useAppDispatch();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
 
   async function handleFile(file: File) {
     dispatch({ type: 'ARCHIVE_LOADING' });
@@ -52,55 +53,77 @@ export function UploadPanel() {
 
   return (
     <div
-      className={`rounded-2xl border border-dashed bg-slate-900/40 p-6 text-center transition-colors sm:p-8 ${
+      className={`flex w-full flex-col items-center justify-center gap-4 rounded-3xl border border-dashed bg-slate-900/40 p-10 text-center transition-colors sm:p-14 ${
         isBusy ? 'animate-pulse border-emerald-500/50' : 'border-slate-700 hover:border-emerald-500/40'
       }`}
     >
+      {/* Native input is visually hidden — its own internal button+label layout can't be reliably
+          flex-centered across browsers, so a custom trigger below drives it instead. */}
       <input
         ref={inputRef}
         type="file"
         accept=".jar,.zip"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) void handleFile(file);
+          if (file) {
+            setFileName(file.name);
+            void handleFile(file);
+          }
         }}
-        className="mx-auto block w-full max-w-xs cursor-pointer text-sm text-slate-400 file:mr-4 file:cursor-pointer file:rounded-lg file:border-0 file:bg-emerald-600 file:px-5 file:py-2.5 file:text-sm file:font-semibold file:text-white file:shadow-lg file:shadow-emerald-900/40 file:transition-colors hover:file:bg-emerald-500"
+        className="sr-only"
       />
-      <p className="mt-3 text-xs text-slate-500">Minecraft .jar or resource pack .zip</p>
 
-      <div className="mt-4 min-h-6">
-        {state.status === 'loading-archive' && (
-          <p className="inline-flex items-center gap-2 text-sm text-slate-300">
-            <Spinner /> Reading jar and extracting textures…
-          </p>
-        )}
-        {state.status === 'building-palette' && (
-          <p className="inline-flex items-center gap-2 text-sm text-slate-300">
-            <Spinner /> Building vanilla palette…
-          </p>
-        )}
-        {state.status === 'error' && (
-          <p className="inline-flex items-center gap-2 rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300 ring-1 ring-red-900">
-            {state.errorMessage}
-          </p>
-        )}
-        {state.status === 'ready' && state.extractedTextures && (
-          <p className="inline-flex items-center gap-1.5 text-sm text-emerald-400">
-            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fillRule="evenodd"
-                d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                clipRule="evenodd"
-              />
-            </svg>
-            <span className="text-slate-300">
-              {state.extractedTextures.size} blocks loaded ·{' '}
-              <span className="font-medium text-emerald-400">{state.palette?.length ?? 0}</span> in the filler
-              palette
-            </span>
-          </p>
-        )}
+      <div className="flex flex-col items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="cursor-pointer rounded-lg bg-emerald-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-emerald-900/40 transition-colors hover:bg-emerald-500"
+        >
+          Choose File
+        </button>
+        <p className="text-sm text-slate-500">{fileName ?? 'No file chosen'}</p>
       </div>
+
+      <p className="text-sm text-slate-500">Minecraft .jar or resource pack .zip</p>
+
+      {/* Only takes up space (and the gap-4 before it) when there's actually something to show —
+          otherwise it left a permanent blank strip at idle that the top of the box didn't mirror,
+          making the box look bottom-heavy instead of symmetrical. */}
+      {state.status !== 'idle' && (
+        <div>
+          {state.status === 'loading-archive' && (
+            <p className="inline-flex items-center gap-2 text-sm text-slate-300">
+              <Spinner /> Reading jar and extracting textures…
+            </p>
+          )}
+          {state.status === 'building-palette' && (
+            <p className="inline-flex items-center gap-2 text-sm text-slate-300">
+              <Spinner /> Building vanilla palette…
+            </p>
+          )}
+          {state.status === 'error' && (
+            <p className="inline-flex items-center gap-2 rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300 ring-1 ring-red-900">
+              {state.errorMessage}
+            </p>
+          )}
+          {state.status === 'ready' && state.extractedTextures && (
+            <p className="inline-flex items-center gap-1.5 text-sm text-emerald-400">
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              <span className="text-slate-300">
+                {state.extractedTextures.size} blocks loaded ·{' '}
+                <span className="font-medium text-emerald-400">{state.palette?.length ?? 0}</span> in the filler
+                palette
+              </span>
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

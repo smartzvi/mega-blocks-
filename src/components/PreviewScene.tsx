@@ -30,7 +30,7 @@ export function PreviewScene() {
   const cameraPosition: [number, number, number] = [24 * scale, 20 * scale, cameraZ];
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-[0_0_50px_-12px_rgba(16,185,129,0.15)]">
+    <div className="w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-[0_0_50px_-12px_rgba(16,185,129,0.15)]">
       <div className="flex items-center justify-between border-b border-slate-800 px-4 py-2.5">
         <span className="text-xs font-medium uppercase tracking-wider text-slate-500">3D Preview</span>
         <span className="text-xs text-slate-600">drag to rotate · scroll to zoom</span>

@@ -77,7 +77,7 @@ export function MaterialList() {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-[0_0_50px_-12px_rgba(16,185,129,0.1)]">
+    <div className="w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-[0_0_50px_-12px_rgba(16,185,129,0.1)]">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-2.5">
         <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Material List</span>
         <div className="flex gap-2">
