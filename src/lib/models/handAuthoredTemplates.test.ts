@@ -303,4 +303,52 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
       }
     }
   });
+
+  it('includes standing + wall variants for all 6 mob head/skull blocks, each an 8x8x8 box centered on X/Z and resting on the ground — dragon_head deliberately excluded (see the doc on skullModel)', () => {
+    const expected: Record<string, string> = {
+      zombie_head: 'zombie/zombie',
+      zombie_wall_head: 'zombie/zombie',
+      skeleton_skull: 'skeleton/skeleton',
+      skeleton_wall_skull: 'skeleton/skeleton',
+      wither_skeleton_skull: 'skeleton/wither_skeleton',
+      wither_skeleton_wall_skull: 'skeleton/wither_skeleton',
+      creeper_head: 'creeper/creeper',
+      creeper_wall_head: 'creeper/creeper',
+      piglin_head: 'piglin/piglin',
+      piglin_wall_head: 'piglin/piglin',
+      player_head: 'player/wide/steve',
+      player_wall_head: 'player/wide/steve',
+    };
+    for (const [name, textureKey] of Object.entries(expected)) {
+      const t = HAND_AUTHORED_TEMPLATES[name];
+      expect(t, `${name} missing`).toBeDefined();
+      expect(t.model.textures.main).toBe(textureKey);
+      expect(t.model.elements).toHaveLength(1);
+      expect(t.model.elements[0].from).toEqual([4, 0, 4]);
+      expect(t.model.elements[0].to).toEqual([12, 8, 12]);
+      expect(t.heightUnits).toBe(16);
+      expect(t.depthUnits).toBe(16);
+    }
+    // Standing and wall variants share identical geometry (no rotation handling), same precedent
+    // as sign/wall_sign.
+    expect(HAND_AUTHORED_TEMPLATES.zombie_head.model.elements).toEqual(HAND_AUTHORED_TEMPLATES.zombie_wall_head.model.elements);
+    expect(HAND_AUTHORED_TEMPLATES.dragon_head).toBeUndefined();
+    expect(HAND_AUTHORED_TEMPLATES.dragon_wall_head).toBeUndefined();
+  });
+
+  it('skeleton_skull and wither_skeleton_skull (and their wall variants) are restricted to a pure wool/concrete/terracotta grayscale palette, excluding stone_deepslate — regression test for real user feedback that the dark eye-socket area was matching polished_deepslate (accurate raw color, but reads as quarried stone rather than bone/shadow)', () => {
+    const grayscale = [
+      'minecraft:black_concrete', 'minecraft:black_wool', 'minecraft:black_terracotta',
+      'minecraft:gray_concrete', 'minecraft:gray_wool', 'minecraft:gray_terracotta',
+      'minecraft:light_gray_concrete', 'minecraft:light_gray_wool', 'minecraft:light_gray_terracotta',
+      'minecraft:white_concrete', 'minecraft:white_wool', 'minecraft:white_terracotta',
+    ];
+    for (const name of ['skeleton_skull', 'skeleton_wall_skull', 'wither_skeleton_skull', 'wither_skeleton_wall_skull']) {
+      expect(HAND_AUTHORED_TEMPLATES[name].elementPaletteRestrictions?.[0]).toEqual(grayscale);
+    }
+    // Every other head/skull is untouched — no evidence they had the same problem.
+    for (const name of ['zombie_head', 'creeper_head', 'piglin_head', 'player_head']) {
+      expect(HAND_AUTHORED_TEMPLATES[name].elementPaletteRestrictions).toBeUndefined();
+    }
+  });
 });

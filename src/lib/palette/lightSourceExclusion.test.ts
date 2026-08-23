@@ -103,6 +103,13 @@ describe('filterLightSourcesForSource', () => {
     expect(filterLightSourcesForSource(palette, 'minecraft:wolf')).toEqual([stone]);
   });
 
+  it('strips lightSource entries for creeper_head/creeper_wall_head and piglin_head/piglin_wall_head — regression test for real jar verification finding sea_lantern/verdant_froglight and glowstone respectively winning a real share of a built head\'s voxels', () => {
+    for (const name of ['creeper_head', 'creeper_wall_head', 'piglin_head', 'piglin_wall_head']) {
+      expect(filterLightSourcesForSource(palette, name)).toEqual([stone]);
+      expect(filterLightSourcesForSource(palette, `minecraft:${name}`)).toEqual([stone]);
+    }
+  });
+
   it('strips lightSource entries for a bed-family source (e.g. froglight no longer used in bed pillows/blankets)', () => {
     expect(filterLightSourcesForSource(palette, 'red_bed')).toEqual([stone]);
     expect(filterLightSourcesForSource(palette, 'minecraft:white_bed')).toEqual([stone]);

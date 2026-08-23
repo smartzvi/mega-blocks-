@@ -73,7 +73,23 @@ export function isWoodFamilySource(sourceName: string): boolean {
 // `wolf`: its coat is predominantly light gray/white, and `pearlescent_froglight` won 20 voxels in
 // a real build (res 32) — small, but the same pattern, caught during initial real-jar verification
 // rather than from user feedback this time.
-const LIGHT_SOURCE_EXCLUDED_EXACT_NAMES = new Set(['sheep', 'bee', 'wolf']);
+// `creeper_head`/`creeper_wall_head`: real jar verification of the new hand-authored skull blocks
+// (handAuthoredTemplates.ts) found `sea_lantern`+`verdant_froglight` winning ~16% of a built head's
+// voxels — creeper's mottled green skin apparently has enough pale-green pixels to read as close to
+// froglight's own green-tinted glow. `piglin_head`/`piglin_wall_head`: `glowstone` won ~20% of a
+// built head — piglin's warm tan/orange skin tone apparently reads close to glowstone's own
+// yellow-orange glow. Both this function's targets, not sourceName strings a mob/item never uses —
+// same "pale/warm surface reads as a light-source glow" pattern as every entry above, just caught
+// during this feature's own initial verification rather than from user feedback.
+const LIGHT_SOURCE_EXCLUDED_EXACT_NAMES = new Set([
+  'sheep',
+  'bee',
+  'wolf',
+  'creeper_head',
+  'creeper_wall_head',
+  'piglin_head',
+  'piglin_wall_head',
+]);
 
 function isExactNameExcluded(sourceName: string): boolean {
   const bare = sourceName.toLowerCase().replace(/^minecraft:/, '');

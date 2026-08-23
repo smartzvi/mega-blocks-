@@ -429,6 +429,53 @@ function signModel(textureKey: string): BlockModel {
   };
 }
 
+/**
+ * Mob head/skull blocks (zombie_head, skeleton_skull, ...) have no real geometry anywhere in the
+ * jar — every one of their blockstates resolves to the same `models/block/skull.json`, which is a
+ * placeholder containing only a `particle` texture reference, no `elements`. Checked Mojang's
+ * bedrock-samples repo too (the source for every mob in handAuthoredMobTemplates.ts) — no dedicated
+ * skull geometry there either (only `wither_skull.geo.json`, the Wither boss's flying projectile,
+ * a different thing entirely). The shape here is the well-known vanilla `SkullModelBase` cuboid — an
+ * 8x8x8 box centered on X/Z, resting on the ground — cross-checked against real decoded textures
+ * before trusting it, not just assumed: at UV origin (0,0), this box's own `boxElement`-computed
+ * "south" rect works out to [8,8,16,16], and sampling that exact rect on every one of
+ * zombie/zombie, skeleton/skeleton, skeleton/wither_skeleton, creeper/creeper, and piglin/piglin
+ * (plus player/wide/steve for the default Player Head) shows real, recognizable face content —
+ * zombie/skeleton's symmetric eye-socket pixels, wither_skeleton's blackened eyes+mouth, creeper's
+ * iconic two-dot-eyes-and-frown, piglin's white tusks, and Steve's own blue-and-white eyes — for
+ * all six, not just assumed to generalize from one. No mirroring applied (unlike
+ * handAuthoredMobTemplates.ts's mobs): this file has no established "front is always low Z"
+ * convention for a single freestanding block, so the face simply renders on the block's real
+ * physical south side.
+ */
+function skullModel(textureKey: string): BlockModel {
+  return {
+    textures: { main: textureKey },
+    elements: [boxElement([4, 0, 4], [12, 8, 12], [0, 0], 'main')],
+  };
+}
+
+// A pure wool/concrete/terracotta black-to-white ladder, deliberately excluding every
+// stone_deepslate-family block — see the comment on the skeleton_skull/wither_skeleton_skull
+// registry entries for why: their real dark pixels are objectively closest (by raw color distance)
+// to polished_deepslate/deepslate_tiles, but that reads as literal quarried stone rather than
+// bone/shadow. Spans real confirmed Lab lightness from black_concrete (L≈2.9) to white_wool
+// (L≈93.3) so the skull's actual light-to-dark range still has a real candidate at every step.
+const SKULL_GRAYSCALE_PALETTE = [
+  'minecraft:black_concrete',
+  'minecraft:black_wool',
+  'minecraft:black_terracotta',
+  'minecraft:gray_concrete',
+  'minecraft:gray_wool',
+  'minecraft:gray_terracotta',
+  'minecraft:light_gray_concrete',
+  'minecraft:light_gray_wool',
+  'minecraft:light_gray_terracotta',
+  'minecraft:white_concrete',
+  'minecraft:white_wool',
+  'minecraft:white_terracotta',
+];
+
 const DYE_COLORS = [
   'white',
   'orange',
@@ -521,4 +568,31 @@ export const HAND_AUTHORED_TEMPLATES: Record<string, HandAuthoredTemplate> = {
       [`${wood}_wall_sign`, template(signModel(`signs/${wood}`))],
     ])
   ),
+  // Wall variants reuse the exact same geometry as their standing counterpart — no rotation
+  // handling, same precedent as sign/wall_sign above. dragon_head is deliberately excluded: the
+  // real Ender Dragon head is a distinctly different, more complex multi-part shape (jaw, etc.),
+  // not this shared simple skull box — same call already made to drop cow/villager/slime from
+  // Mobs mode rather than force a bad fit.
+  zombie_head: template(skullModel('zombie/zombie')),
+  zombie_wall_head: template(skullModel('zombie/zombie')),
+  // Per real user feedback: the bone-eye-socket area's real medium-gray pixels (skeleton's own
+  // darkest real pixel is RGB(73,73,73), a true neutral gray with zero chroma) were matching
+  // `polished_deepslate` — verified this is genuinely the closest raw color (deltaE 0.4, an
+  // almost perfect match) so it isn't a matching bug, but it reads as the wrong *material*: literal
+  // quarried floor-tile stone instead of shadow/bone. Restricted to a pure wool/concrete/terracotta
+  // grayscale ladder (SKULL_GRAYSCALE_PALETTE) spanning the same real black-to-white range without
+  // any stone_deepslate-family candidate — same "matched but mismatched-looking" class of fix
+  // sheep's legs and beacon's crystal already needed elementPaletteRestrictions for.
+  skeleton_skull: template(skullModel('skeleton/skeleton'), 16, { 0: SKULL_GRAYSCALE_PALETTE }),
+  skeleton_wall_skull: template(skullModel('skeleton/skeleton'), 16, { 0: SKULL_GRAYSCALE_PALETTE }),
+  wither_skeleton_skull: template(skullModel('skeleton/wither_skeleton'), 16, { 0: SKULL_GRAYSCALE_PALETTE }),
+  wither_skeleton_wall_skull: template(skullModel('skeleton/wither_skeleton'), 16, { 0: SKULL_GRAYSCALE_PALETTE }),
+  creeper_head: template(skullModel('creeper/creeper')),
+  creeper_wall_head: template(skullModel('creeper/creeper')),
+  piglin_head: template(skullModel('piglin/piglin')),
+  piglin_wall_head: template(skullModel('piglin/piglin')),
+  // Real per-player skins aren't available offline — uses the bundled default ("Steve") skin,
+  // same "default variant only for v1" call already made for pig/cow/chicken biome variants.
+  player_head: template(skullModel('player/wide/steve')),
+  player_wall_head: template(skullModel('player/wide/steve')),
 };
