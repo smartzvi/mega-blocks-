@@ -70,7 +70,10 @@ export function isWoodFamilySource(sourceName: string): boolean {
 // reads as an odd blotch against plain white wool, per direct user feedback on a real build.
 // `bee`: its wings' pale color pulled in a real chunk of froglight/sea_lantern (confirmed ~8% of a
 // built bee's voxels at res 16) — the same "pale surface reads as a light-source glow" pattern.
-const LIGHT_SOURCE_EXCLUDED_EXACT_NAMES = new Set(['sheep', 'bee']);
+// `wolf`: its coat is predominantly light gray/white, and `pearlescent_froglight` won 20 voxels in
+// a real build (res 32) — small, but the same pattern, caught during initial real-jar verification
+// rather than from user feedback this time.
+const LIGHT_SOURCE_EXCLUDED_EXACT_NAMES = new Set(['sheep', 'bee', 'wolf']);
 
 function isExactNameExcluded(sourceName: string): boolean {
   const bare = sourceName.toLowerCase().replace(/^minecraft:/, '');

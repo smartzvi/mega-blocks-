@@ -94,11 +94,13 @@ describe('filterLightSourcesForSource', () => {
     expect(filterLightSourcesForSource(palette, 'minecraft:coarse_dirt')).toEqual([stone]);
   });
 
-  it('strips lightSource entries for sheep and bee specifically (exact-name exclusion, not a family)', () => {
+  it('strips lightSource entries for sheep, bee, and wolf specifically (exact-name exclusion, not a family)', () => {
     expect(filterLightSourcesForSource(palette, 'sheep')).toEqual([stone]);
     expect(filterLightSourcesForSource(palette, 'minecraft:sheep')).toEqual([stone]);
     expect(filterLightSourcesForSource(palette, 'bee')).toEqual([stone]);
     expect(filterLightSourcesForSource(palette, 'minecraft:bee')).toEqual([stone]);
+    expect(filterLightSourcesForSource(palette, 'wolf')).toEqual([stone]);
+    expect(filterLightSourcesForSource(palette, 'minecraft:wolf')).toEqual([stone]);
   });
 
   it('strips lightSource entries for a bed-family source (e.g. froglight no longer used in bed pillows/blankets)', () => {

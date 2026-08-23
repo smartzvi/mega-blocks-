@@ -266,6 +266,27 @@ function thickenAxis(el: BlockModelElement, axis: 0 | 1 | 2, amount: number): Bl
   return { from, to, faces: el.faces };
 }
 
+/** Extends an already-built element's Z-low ("front", per this file's convention) edge outward by
+ *  `amount`, leaving every other bound and `faces` untouched — same "touch geometry only, keep the
+ *  real UV mapping" reasoning as `inflateBounds`/`thickenAxis`. Used for wolf's `upperBody`: the
+ *  real geo.json leaves a genuine 4-unit empty gap between the head's rear edge (Z=-5) and
+ *  upperBody's front edge (Z=-1) — real Minecraft's neck/head animation and shading bridge it
+ *  visually, but voxelized literally (a static model, no animation) that gap reads as a floating,
+ *  disconnected head, confirmed by real user feedback. */
+function extendFront(el: BlockModelElement, amount: number): BlockModelElement {
+  return { from: [el.from[0], el.from[1], el.from[2] - amount], to: el.to, faces: el.faces };
+}
+
+/** Same as `extendFront`, but grows the Z-high ("back") edge instead. Used for wolf's `upperBody`:
+ *  its real rear edge (Z=6) merely touches the rear legs' own front edge (Z=6) at a single
+ *  boundary plane rather than overlapping them the way the front-edge fix overlaps the front legs
+ *  (comfortably inside upperBody's Z range after `extendFront`) — a boundary-only touch can still
+ *  voxelize to a visible gap depending on how each side rounds to the grid, confirmed by real user
+ *  feedback that the rear legs specifically (not the front ones) read as disconnected. */
+function extendBack(el: BlockModelElement, amount: number): BlockModelElement {
+  return { from: el.from, to: [el.to[0], el.to[1], el.to[2] + amount], faces: el.faces };
+}
+
 /** Shifts every element so the model's own bounding box starts at (0, 0, 0) — required since
  *  `rasterizeItemModel` silently clips negative coordinates — and derives `heightUnits`/`depthUnits`
  *  from that same real bounding box instead of a hardcoded per-mob guess. `textures` is a full map
@@ -766,6 +787,144 @@ function beeModel(textureKey: string): HandAuthoredTemplate {
 }
 
 /**
+ * Fifth batch — wolf, added per user request. Sourced the same way as every mob here: fetched the
+ * real `wolf.geo.json` from Mojang's `bedrock-samples` repo directly (not summarized/paraphrased —
+ * `curl`'d the raw file so every origin/size/uv below is transcribed byte-for-byte, not read off an
+ * AI-summarized version) and confirmed no bone anywhere has a `rotation`/`bind_pose_rotation` field
+ * — the simplest case so far, same as chicken/bee: every cube is a plain `cubeElement` using its
+ * real origin/size/uv untouched, no `rotatedBodyElement`/`scaleBounds` needed (widest real point is
+ * `upperBody` at 8 units, well under the 16-unit X ceiling).
+ *
+ * Real bone layout: `head` (main skull + 2 ear cubes + a separate snout cube, all sharing the
+ * head's local space, no per-cube rotation), `body` (a plain rear-torso box — present in the raw
+ * geo.json, but deleted here; see round three's "low belly" fix below) and `upperBody` (a
+ * separate, larger box for the raised chest/shoulder hump real wolves have — genuinely overlapped
+ * `body` in the raw data), 4 independent `legN` bones (each its own explicit origin, no mirror
+ * flag — `leg0`/`leg1` sit at the tail end (Z 6-8, i.e. the REAR legs) and `leg2`/`leg3` sit at the
+ * head end (Z -5 to -3, the FRONT legs) — confirmed by comparing each leg's Z position against the
+ * head's (Z -12 to -5) and tail's (Z 7-9), not assumed from bone-name order), and `tail` (a plain
+ * vertical box at the rear, no rotation in the bind pose — real in-game wagging/angling is a
+ * runtime animation this format doesn't carry).
+ *
+ * Verified against the real jar (`wolf/wolf.png`, 64×32 — matches the geo.json's own declared
+ * `texture_width`/`texture_height` exactly, unlike sheep's wool texture which didn't) before
+ * trusting the front/back orientation: sampled the head cube's own `boxElement`-computed "south"
+ * rect (pre-mirror) directly and found a symmetric pair of near-black eye pixels flanked by white —
+ * and the snout's own "south" rect shows a single dark nose-tip pixel plus a darker muzzle-
+ * underside row. Same "eyes land in boxElement's south rect, corrected to the true front by
+ * `normalizeMobModel`'s uniform `mirrorFrontBack`" pattern every other mob already relies on — no
+ * special-casing needed here.
+ *
+ * **Round two, three real fixes from direct user feedback on the first build (no screenshot this
+ * time, but concrete enough to act on directly):**
+ * - **Tail "not oriented right"**: the raw geo.json tail bone has no rotation anywhere, authored as
+ *   a literal vertical post (8 tall × 2 deep) directly behind the body — reads as a flagpole, not a
+ *   tail, once voxelized with no animation to soften it. Same class of departure as panda's snout /
+ *   bee's wings (hand-placed silhouette instead of literal transcription): rebuilt as a
+ *   backward-and-slightly-up-pointing box (the opposite ratio) flush against the body's real rear
+ *   edge. Built via `stretchedBox` sourcing one small confirmed-uniform real fur patch
+ *   (`WOLF_TAIL_FUR_RECT`, decoded directly — the tail's real painted region is a flat light gray
+ *   matching the body, no separate tip color to preserve) rather than `cubeElement`, since the
+ *   redesigned box's proportions no longer match the real cube's own box-UV layout.
+ * - **"Color grading is a bit off"**: an unrestricted real build leaned heavily on stark,
+ *   manufactured-looking `white_concrete`/`diorite`/`smooth_stone` (confirmed: over 2200 of ~2960
+ *   voxels) for what should read as soft fur — those are real, close color matches (the default
+ *   wolf texture genuinely is quite pale), but the *material* reads wrong for skin/fur regardless
+ *   of raw color accuracy, the same "matched but mismatched-looking" class of problem sheep's legs
+ *   and beacon's crystal already needed `elementPaletteRestrictions` for. `WOLF_FUR_PALETTE`
+ *   restricts the main fur-bearing elements (`upperBody`, all 4 legs — not ears/snout/tail, no
+ *   evidence those specifically had the same problem) to wool/terracotta tones only, spanning the
+ *   same real light-to-medium gray range without wandering into concrete/polished stone.
+ *
+ * **Round three, three more real fixes from a real screenshot:**
+ * - **"Low belly, why 2 of them"**: `body` (the original separate rear-torso bone, Y 3-12) and
+ *   `upperBody` (Y 7-13, added after so it wins their overlap) only share Y 7-12 — `body`'s own
+ *   Y 3-7 slice sticks out below `upperBody` uncovered, narrower than `upperBody` above it, reading
+ *   as a distinct low-hanging shelf along the belly (the "2 low bellies" — the step itself plus the
+ *   torso above it reading as two stacked layers). Once that Y 3-7 slice is removed, `body`'s
+ *   entire remaining footprint (X -3..3, Z -1..5) is already fully contained inside `upperBody`'s
+ *   (X -4..4, Z -5.5..6 after the extendFront fix below) on every axis — completely hidden, so
+ *   `body` is deleted outright rather than kept as dead geometry. This also means `extendFront`
+ *   (used to close the real head/`upperBody` neck gap, still needed) is now the only thing standing
+ *   in for the old `body`'s forward reach.
+ * - **Tail too long**: shortened from 6 real units of backward reach to 4 (height shrunk too, from
+ *   4 to 3, keeping Z-depth > Y-height so it still reads as backward-pointing rather than a post
+ *   again) — same repositioned silhouette, just less of it.
+ * - **Eye color accidentally removed**: round two's `WOLF_FUR_PALETTE` restriction was applied to
+ *   the whole `head` element, but the head's natural box-UV wrap is where the real eye pixels live
+ *   (see the front/back verification above) — restricting the *entire* head to only white/light-gray
+ *   wool/terracotta left literally no dark candidate for the eyes to match, forcing them to the
+ *   closest allowed (light) color at every resolution. Fixed with `WOLF_HEAD_PALETTE` — the same 4
+ *   fur tones plus `black_concrete` — so light fur pixels still avoid stone/concrete while the
+ *   genuinely dark eye pixels have a real dark candidate again.
+ *
+ * **Round four, two more real fixes from real user feedback:**
+ * - **Tail too short (again) + wrong color**: lengthened back out from round three's 4 units of
+ *   backward reach to 6 (height stays at round three's 3, so it still reads as backward-pointing
+ *   rather than a post). Color: the tail was never added to `WOLF_FUR_PALETTE`'s restriction list,
+ *   so unlike every other main body part it was free to match *any* palette block — even though its
+ *   real texture color is the same light gray as the body, an unrestricted match can (and did) land
+ *   on a visibly different block than the restricted body/legs. Added to the restriction list so it
+ *   draws from the same curated fur tones as the rest of the animal.
+ * - **Rear legs not attached (front legs were fine)**: `upperBody`'s real rear edge (Z=6, before
+ *   this fix) exactly equals the rear legs' own front edge (Z=6) — a single shared boundary plane,
+ *   not a real overlap. The *front* legs never had this problem because `extendFront` already pushes
+ *   upperBody's front edge a full 0.5 units past the front legs' own back edge, comfortably inside
+ *   its footprint — but nothing had ever extended the back edge the same way. A boundary-only touch
+ *   can still voxelize to a visible gap depending on how each side's geometry rounds to the output
+ *   grid, which is exactly what real user feedback reported. Fixed with the new `extendBack` helper
+ *   (mirrors `extendFront`), pushing upperBody's rear edge out by 1 unit to genuinely overlap the
+ *   rear legs the same way the front is already overlapped.
+ *
+ * **Round five, per further real user feedback that the hind legs were still (partly) floating**:
+ * round four's 1-unit `extendBack` only covered *half* the rear legs' own 2-unit Z-thickness
+ * (rear legs span real Z 6-8; upperBody's rear edge only reached Z=7) — nowhere near the front
+ * legs' own attachment, where upperBody's front edge (`extendFront`, unchanged) comfortably
+ * contains the *entire* front legs' Z-footprint (real Z -5..-3) with 0.5 units of margin to spare.
+ * `extendBack`'s amount increased from 1 to 2.5, so upperBody's rear edge now reaches Z=8.5 —
+ * fully containing the rear legs' whole Z-thickness plus the same 0.5-unit margin the front
+ * already had, matching front and rear to the same standard instead of leaving rear on a thinner
+ * boundary-only touch. Tail also adjusted per the same feedback: less tall (height 3→2) and longer
+ * (backward reach 6→8).
+ */
+const WOLF_TAIL_FUR_RECT: [number, number, number, number] = [9, 20, 11, 22];
+
+// Excludes concrete/polished-stone-family candidates for wolf's main fur elements — see the doc on
+// wolfModel's round-two fixes above. Spans the same real light-to-medium gray range via wool/
+// terracotta instead, which reads as soft fur rather than a building material.
+const WOLF_FUR_PALETTE = ['minecraft:white_wool', 'minecraft:light_gray_wool', 'minecraft:white_terracotta', 'minecraft:light_gray_terracotta'];
+
+// Same as WOLF_FUR_PALETTE plus black — the head is the one fur-restricted element that also needs
+// to keep matching the real dark eye pixels its natural UV wrap contains (see round three's eye-
+// color fix above); every other fur element (upperBody, legs) has no such dark detail to preserve.
+const WOLF_HEAD_PALETTE = [...WOLF_FUR_PALETTE, 'minecraft:black_concrete'];
+
+function wolfModel(textureKey: string): HandAuthoredTemplate {
+  const elements = [
+    extendBack(extendFront(cubeElement({ origin: [-4, 7, -1], size: [8, 6, 7], uv: [21, 0] }, 'main'), 4.5), 2.5), // upperBody (chest/shoulder hump): front extended to meet the head (closes the real geo.json's neck gap), back extended to fully contain the rear legs' Z-footprint with the same 0.5-unit margin the front legs already had (round five fix — round four's amount only covered half the rear legs' width) — the old separate "body" bone is gone (see round three's "low belly" fix), fully redundant once its own unique low slice was removed
+    cubeElement({ origin: [-3, 7.5, -9], size: [6, 6, 4], uv: [0, 0] }, 'main'), // head
+    cubeElement({ origin: [-3, 13.5, -7], size: [2, 2, 1], uv: [16, 14] }, 'main'), // left ear
+    cubeElement({ origin: [1, 13.5, -7], size: [2, 2, 1], uv: [16, 14] }, 'main'), // right ear
+    cubeElement({ origin: [-1.5, 7.51563, -12], size: [3, 3, 4], uv: [0, 10] }, 'main'), // snout
+    cubeElement({ origin: [-2.5, 0, 6], size: [2, 8, 2], uv: [0, 18] }, 'main'), // rear-left leg
+    cubeElement({ origin: [0.5, 0, 6], size: [2, 8, 2], uv: [0, 18] }, 'main'), // rear-right leg
+    cubeElement({ origin: [-2.5, 0, -5], size: [2, 8, 2], uv: [0, 18] }, 'main'), // front-left leg
+    cubeElement({ origin: [0.5, 0, -5], size: [2, 8, 2], uv: [0, 18] }, 'main'), // front-right leg
+    stretchedBox([-1, 9, 5], [1, 11, 13], WOLF_TAIL_FUR_RECT, 'main'), // tail — backward/up-pointing box; round five made it thinner (height 3→2) and longer (backward reach 6→8) per further feedback
+  ];
+  const restrictions: Record<number, string[]> = {
+    0: WOLF_FUR_PALETTE, // upperBody
+    1: WOLF_HEAD_PALETTE, // head — keeps black for the eyes
+    5: WOLF_FUR_PALETTE,
+    6: WOLF_FUR_PALETTE,
+    7: WOLF_FUR_PALETTE,
+    8: WOLF_FUR_PALETTE, // 4 legs
+    9: WOLF_FUR_PALETTE, // tail — round four: match the body's own restricted fur colors instead of being free to match a different block entirely
+  };
+  return normalizeMobModel(elements, { main: textureKey }, restrictions);
+}
+
+/**
  * Default variant only for v1 (see the project's Mobs-mode plan) — real mobs have biome/profession
  * texture variants (`pig/warm_pig.png`, `pig/cold_pig.png`, ...) that aren't picked yet; adding a
  * variant picker later is a clean extension of this same flat-registry pattern, mirroring how
@@ -781,4 +940,5 @@ export const HAND_AUTHORED_MOB_TEMPLATES: Record<string, HandAuthoredTemplate> =
   'iron golem': ironGolemModel('iron_golem/iron_golem'),
   panda: pandaModel('panda/panda'),
   bee: beeModel('bee/bee'),
+  wolf: wolfModel('wolf/wolf'),
 };

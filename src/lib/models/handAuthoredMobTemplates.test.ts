@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { HAND_AUTHORED_MOB_TEMPLATES } from './handAuthoredMobTemplates';
 
-const MOB_NAMES = ['pig', 'chicken', 'zombie', 'skeleton', 'snow golem', 'sheep', 'iron golem', 'panda', 'bee'];
+const MOB_NAMES = ['pig', 'chicken', 'zombie', 'skeleton', 'snow golem', 'sheep', 'iron golem', 'panda', 'bee', 'wolf'];
 
 describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
-  it('has exactly the 9 starter mobs, each with a real entity texture key', () => {
+  it('has exactly the 10 starter mobs, each with a real entity texture key', () => {
     expect(Object.keys(HAND_AUTHORED_MOB_TEMPLATES).sort()).toEqual([...MOB_NAMES].sort());
     expect(HAND_AUTHORED_MOB_TEMPLATES.pig.model.textures.main).toBe('pig/temperate_pig');
     expect(HAND_AUTHORED_MOB_TEMPLATES.chicken.model.textures.main).toBe('chicken/temperate_chicken');
@@ -16,6 +16,7 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(HAND_AUTHORED_MOB_TEMPLATES['iron golem'].model.textures.main).toBe('iron_golem/iron_golem');
     expect(HAND_AUTHORED_MOB_TEMPLATES.panda.model.textures.main).toBe('panda/panda');
     expect(HAND_AUTHORED_MOB_TEMPLATES.bee.model.textures.main).toBe('bee/bee');
+    expect(HAND_AUTHORED_MOB_TEMPLATES.wolf.model.textures.main).toBe('wolf/wolf');
   });
 
   it('every element stays within model-space X 0-16 for every mob — rasterizeItemModel silently clips out-of-range X, so this must hold exactly (this is the real regression test for iron golem, the first mob wider than one block)', () => {
@@ -55,8 +56,8 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     }
   });
 
-  it('quadrupeds (pig/chicken/sheep/panda): legs touch the ground and the body sits above them, not floating or sunk', () => {
-    for (const name of ['pig', 'chicken', 'sheep', 'panda']) {
+  it('quadrupeds (pig/chicken/sheep/panda/wolf): legs touch the ground and the body sits above them, not floating or sunk', () => {
+    for (const name of ['pig', 'chicken', 'sheep', 'panda', 'wolf']) {
       const { model } = HAND_AUTHORED_MOB_TEMPLATES[name];
       // Every model's leg elements are the shortest-Y-extent elements touching y=0 — just assert
       // at least one element starts exactly at the ground.
@@ -428,5 +429,103 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     }
     expect(minX).toBeGreaterThanOrEqual(0);
     expect(maxX).toBeLessThanOrEqual(16);
+  });
+
+  it('wolf has 10 elements (upperBody + head + 2 ears + snout + 4 legs + tail) — the original separate "body" bone was deleted (see the doc on wolfModel\'s round-three "low belly" fix), not just hidden', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    expect(model.elements.length).toBe(10);
+  });
+
+  it('places the real eye-bearing UV region on the wolf head\'s physical front (north) — regression test confirmed by directly sampling the real wolf/wolf.png texture at this exact rect: a symmetric pair of near-black eye pixels flanked by white', () => {
+    // Raw head origin (-3,7.5,-9) size (6,6,4), uv (0,0). "south" formula: (u+dz,v+dz,u+dz+dx,v+dz+dy)
+    // = (4,4,10,10) — matches real jar pixel sampling done while implementing this mob.
+    const wolfHead = HAND_AUTHORED_MOB_TEMPLATES.wolf.model.elements[1]; // upperBody, head, ears, snout, legs, tail
+    expect(wolfHead.faces.north?.uv).toEqual([4, 4, 10, 10]);
+    expect(wolfHead.faces.south?.uv).not.toEqual([4, 4, 10, 10]);
+  });
+
+  it('wolf\'s 2 ears and 4 legs are placed symmetrically on either side, not overlapping', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    const [, , leftEar, rightEar, , rearLeftLeg, rearRightLeg, frontLeftLeg, frontRightLeg] = model.elements;
+    for (const [left, right] of [
+      [leftEar, rightEar],
+      [rearLeftLeg, rearRightLeg],
+      [frontLeftLeg, frontRightLeg],
+    ] as const) {
+      expect(right.to[0] - right.from[0]).toBeCloseTo(left.to[0] - left.from[0], 5); // same size
+      expect(left.to[0]).toBeLessThanOrEqual(right.from[0]); // non-overlapping, one on each side
+    }
+  });
+
+  it('wolf\'s front legs sit closer to the head than the rear legs — regression test confirmed against the real geo.json: leg0/leg1 (real Z 6-8, near the tail) are the REAR legs and leg2/leg3 (real Z -5 to -3, near the head) are the FRONT legs, the opposite of what raw bone-name order (leg0..leg3) would suggest', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    const head = model.elements[1];
+    const [, , , , , rearLeftLeg, , frontLeftLeg] = model.elements;
+    const headCenterZ = (head.from[2] + head.to[2]) / 2;
+    const frontLegCenterZ = (frontLeftLeg.from[2] + frontLeftLeg.to[2]) / 2;
+    const rearLegCenterZ = (rearLeftLeg.from[2] + rearLeftLeg.to[2]) / 2;
+    expect(Math.abs(frontLegCenterZ - headCenterZ)).toBeLessThan(Math.abs(rearLegCenterZ - headCenterZ));
+  });
+
+  it('wolf\'s upperBody now overlaps (not gaps from) the head — regression test for real user feedback that the body read as disconnected: the raw geo.json leaves a genuine 4-unit empty gap between the head\'s rear edge and upperBody\'s front edge', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    const [upperBody, head] = model.elements;
+    expect(upperBody.from[2]).toBeLessThanOrEqual(head.to[2]);
+  });
+
+  it('wolf\'s original separate "body" bone is gone — its own unique Y 3-7 slice (uncovered by upperBody\'s Y 7-13) was the "low belly" real user feedback flagged as a duplicate-looking shelf; once that slice is removed, body\'s entire remaining footprint is fully contained inside upperBody\'s on every axis, so it added nothing kept', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    const [upperBody] = model.elements;
+    // upperBody alone now reaches down to real Y=7, not the old body's Y=3 — confirms the low
+    // shelf is gone, not just visually hidden behind something still numerically present.
+    expect(upperBody.from[1]).toBeGreaterThan(3);
+  });
+
+  it('wolf\'s tail is reoriented to point backward (deeper in Z than tall in Y), not the literal raw geo.json\'s vertical post — regression test for real user feedback across several rounds: "isn\'t oriented right" (redesigned), "too long" (shortened to 4), "longer" (lengthened to 6), then "less thick, a bit longer" (round five: height 3→2, length 6→8)', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    const upperBody = model.elements[0];
+    const tail = model.elements[9];
+    const ySpan = tail.to[1] - tail.from[1];
+    const zSpan = tail.to[2] - tail.from[2];
+    expect(zSpan).toBeGreaterThan(ySpan);
+    expect(ySpan).toBeCloseTo(2, 5); // round five: thinner, was 3
+    expect(zSpan).toBeCloseTo(8, 5); // round five: longer, was 6
+    expect(tail.from[2]).toBeLessThanOrEqual(upperBody.to[2]); // flush against (or overlapping) the body's real rear edge
+  });
+
+  it('wolf\'s tail samples one uniform real fur-gray rect across every face (a flat stretchedBox), not the raw cube\'s own box-UV wrap — required since the redesigned box\'s proportions no longer match the real cube\'s layout', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    const tail = model.elements[9];
+    const uvs = Object.values(tail.faces).map((f) => f?.uv);
+    for (const uv of uvs) {
+      expect(uv).toEqual(uvs[0]);
+    }
+  });
+
+  it('wolf\'s main fur elements (upperBody, all 4 legs, tail) are restricted to wool/terracotta tones, not concrete/stone — regression test for real user feedback that unrestricted matching leaned on stark concrete/diorite/smooth_stone for what should read as soft fur, and (round four) that the tail specifically was matching a visibly different block than the body despite sharing the same real texture color', () => {
+    const { elementPaletteRestrictions } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    const furPalette = ['minecraft:white_wool', 'minecraft:light_gray_wool', 'minecraft:white_terracotta', 'minecraft:light_gray_terracotta'];
+    for (const i of [0, 5, 6, 7, 8, 9]) {
+      expect(elementPaletteRestrictions?.[i]).toEqual(furPalette);
+    }
+    // Ears and snout are NOT restricted — no evidence they had the same problem.
+    for (const i of [2, 3, 4]) {
+      expect(elementPaletteRestrictions?.[i]).toBeUndefined();
+    }
+  });
+
+  it('wolf\'s upperBody fully contains the rear legs\' real Z-footprint, matching how the front legs are already fully contained — regression test for real user feedback across two rounds: round four\'s 1-unit extendBack only covered half the rear legs\' own 2-unit width (a real, if partial, floating-leg complaint that persisted); round five increased it to 2.5 so the whole rear leg width sits inside upperBody\'s range, the same standard the front legs already had via extendFront', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    const [upperBody, , , , , rearLeftLeg, , frontLeftLeg] = model.elements;
+    expect(upperBody.to[2]).toBeGreaterThan(rearLeftLeg.to[2]); // whole rear leg, not just its near edge
+    expect(upperBody.from[2]).toBeLessThan(frontLeftLeg.from[2]); // front already fully contained (unchanged)
+  });
+
+  it('wolf\'s head is restricted to the fur palette plus black — regression test for a real bug: restricting the whole head to only light wool/terracotta tones left no dark candidate for its real eye pixels, silently erasing eye color at every resolution', () => {
+    const { elementPaletteRestrictions } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    const headPalette = elementPaletteRestrictions?.[1];
+    expect(headPalette).toContain('minecraft:black_concrete');
+    expect(headPalette).toContain('minecraft:white_wool');
+    expect(headPalette).toContain('minecraft:light_gray_wool');
   });
 });
