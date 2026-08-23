@@ -300,9 +300,9 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(heightUnits).toBeCloseTo((43 * 16) / 26, 5);
   });
 
-  it('bee has 15 elements (body + 2 rear stripes + tail cap + stinger + 2 antennae + 6 leg pegs + 2 wings), no bind_pose_rotation needed so no scaleBounds', () => {
+  it('bee has 17 elements (body + 2 stripes + tail cap + stinger + 2 antennae + 6 leg pegs + 2 wings + 2 eyes), no bind_pose_rotation needed so no scaleBounds', () => {
     const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
-    expect(model.elements.length).toBe(15);
+    expect(model.elements.length).toBe(17);
   });
 
   it('bee\'s stinger has real physical thickness along its otherwise-zero raw geo.json X axis — regression test for a real engine limitation: rasterizeItemModel only voxelizes 3D volume, so a literal zero-thickness flat-plane cube (Bedrock\'s real double-sided-quad convention for this part) would voxelize to nothing', () => {
@@ -331,21 +331,23 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(stingerCenterX).toBeCloseTo(bodyCenterX, 0);
   });
 
-  it('bee\'s 2 rear stripes sit in the back half of the body, not the head half — regression test for real user feedback that the natural texture wrap\'s stripe-like detail read as concentrated near the head instead', () => {
+  it('bee\'s 2 stripes sit at their real texture-verified Z positions (Z[-1,0] and Z[1,2]), each separated from its neighbors by a real yellow gap — regression test for direct luminance sampling of the real bee/bee texture\'s top and side faces, which found the previous Z[0,1]/Z[2,3] placement off by one real unit (the old Z[2,3] stripe had no gap before the tail cap, fusing into one blob instead of reading as 2 separate stripes)', () => {
     const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
     const [body, stripe1, stripe2, tailCap] = model.elements;
-    const bodyMidZ = (body.from[2] + body.to[2]) / 2;
     for (const stripe of [stripe1, stripe2]) {
       // Share the body's X/Y footprint (full-width bands, not narrow patches).
       expect(stripe.from[0]).toBeCloseTo(body.from[0], 5);
       expect(stripe.to[0]).toBeCloseTo(body.to[0], 5);
       expect(stripe.from[1]).toBeCloseTo(body.from[1], 5);
       expect(stripe.to[1]).toBeCloseTo(body.to[1], 5);
-      // Entirely in the rear (high-Z) half of the body, not the front (head) half.
-      expect(stripe.from[2]).toBeGreaterThanOrEqual(bodyMidZ);
     }
-    expect(stripe1.to[2]).toBeLessThanOrEqual(stripe2.from[2]); // ordered front-to-back, non-overlapping
-    expect(stripe2.to[2]).toBeCloseTo(tailCap.from[2], 5); // second stripe flush against the tail cap
+    // Body spans real Z[-5,5] (body.from[2] = shifted real -5); stripes sit at real Z[-1,0] and Z[1,2].
+    expect(stripe1.from[2]).toBeCloseTo(body.from[2] + 4, 5);
+    expect(stripe1.to[2]).toBeCloseTo(body.from[2] + 5, 5);
+    expect(stripe2.from[2]).toBeCloseTo(body.from[2] + 6, 5);
+    expect(stripe2.to[2]).toBeCloseTo(body.from[2] + 7, 5);
+    expect(stripe1.to[2]).toBeLessThan(stripe2.from[2]); // real yellow gap between the 2 stripes
+    expect(stripe2.to[2]).toBeLessThan(tailCap.from[2]); // real yellow gap before the tail cap (not flush)
   });
 
   it('bee\'s 6 leg pegs are small, individually isolated 1x2x1 boxes hugging the body\'s left/right X edges — regression test for a real bug: the original full-width flat leg bars mostly hollowed out under this app\'s universal edge-culling once sandwiched against the body and each other', () => {
@@ -408,6 +410,32 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     const wingPalette = ['minecraft:white_wool', 'minecraft:white_concrete', 'minecraft:light_gray_wool', 'minecraft:light_gray_concrete'];
     expect(elementPaletteRestrictions?.[13]).toEqual(wingPalette);
     expect(elementPaletteRestrictions?.[14]).toEqual(wingPalette);
+    // Eyes are restricted to black + a curated mint/cyan highlight allow-list (round six) — the
+    // real eye pixel data includes a genuine pale mint highlight, confirmed against a direct
+    // user-supplied reference image, not just plain black.
+    const eyePalette = [...black, 'minecraft:stripped_warped_stem', 'minecraft:light_blue_wool', 'minecraft:cyan_wool'];
+    expect(elementPaletteRestrictions?.[15]).toEqual(eyePalette);
+    expect(elementPaletteRestrictions?.[16]).toEqual(eyePalette);
+  });
+
+  it('bee\'s 2 eyes sit symmetrically at the outer edge columns of the front (head) face, 3 real units tall, restored after round four\'s body-flattening had deleted them (round six/seven) — regression test for real user feedback ("it doesn\'t have eyes", then a reference image showing the real 2-tone look, then a follow-up correction on the real texture\'s exact 3-row height and edge-column position) and for direct pixel sampling of the real bee/bee texture\'s front-face rect (u10-16,v10-16)', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
+    const body = model.elements[0];
+    const [rightEye, leftEye] = model.elements.slice(15, 17);
+    // Flush against the body's own front face.
+    expect(rightEye.from[2]).toBeCloseTo(body.from[2], 5);
+    expect(leftEye.from[2]).toBeCloseTo(body.from[2], 5);
+    // 3 real units tall (the real texture's eye pattern spans exactly 3 pixel rows).
+    expect(rightEye.to[1] - rightEye.from[1]).toBeCloseTo(3, 5);
+    expect(leftEye.to[1] - leftEye.from[1]).toBeCloseTo(3, 5);
+    // Real X[-3,-1] and X[2,4] (body.from[0] = shifted real -3, body.to[0] = shifted real 4) — each
+    // eye sits flush against its own side of the face (the outer edge columns), not more centered.
+    expect(rightEye.from[0]).toBeCloseTo(body.from[0], 5);
+    expect(rightEye.to[0]).toBeCloseTo(body.from[0] + 2, 5);
+    expect(leftEye.from[0]).toBeCloseTo(body.from[0] + 5, 5);
+    expect(leftEye.to[0]).toBeCloseTo(body.to[0], 5);
+    expect(rightEye.to[0] - rightEye.from[0]).toBeCloseTo(leftEye.to[0] - leftEye.from[0], 5);
+    expect(rightEye.to[0]).toBeLessThanOrEqual(leftEye.from[0]);
   });
 
   it('bee\'s two wings are placed symmetrically on either side of the body, not overlapping it or each other', () => {

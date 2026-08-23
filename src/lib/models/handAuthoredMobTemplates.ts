@@ -620,6 +620,18 @@ const BEE_YELLOW: [number, number, number, number] = [10, 7, 17, 9];
 // white-gray, not brown — so no off-theme wood block can win there either.
 const BEE_WING_PALETTE = ['minecraft:white_wool', 'minecraft:white_concrete', 'minecraft:light_gray_wool', 'minecraft:light_gray_concrete'];
 
+// Curated allow-list for the eyes (round six): per direct user-supplied reference image, the real
+// eye isn't solid black — it has a small pale mint/cyan highlight pixel (the same real pixel round
+// four mistook for a stray artifact and round five, overcorrecting for the earlier "eye color is
+// blue" feedback, forced to plain black). Real-palette matching (via this app's own `matchPixel`,
+// checked directly against the real sampled RGB (124,201,209) with the actual glass/light-source
+// filters `buildMobVoxelGrid` applies for "bee") lands on `stripped_warped_stem` — a real, already-
+// on-theme cyan-teal wood block, not a stray pick. Restricted (rather than left fully unrestricted)
+// to guard against an unrelated color winning at a sub-pixel-interpolated edge, same reasoning as
+// every other small-element restriction in this file; `light_blue_wool`/`cyan_wool` kept alongside
+// as cross-resource-pack fallbacks in case another pack's equivalent pixel samples differently.
+const BEE_EYE_PALETTE = [...BEE_BLACK_PALETTE, 'minecraft:stripped_warped_stem', 'minecraft:light_blue_wool', 'minecraft:cyan_wool'];
+
 /**
  * Fourth batch — bee, added per user request, then cleaned up across two further rounds of real
  * user feedback on screenshots. No `bind_pose_rotation` anywhere (the body bone is already
@@ -676,6 +688,23 @@ const BEE_WING_PALETTE = ['minecraft:white_wool', 'minecraft:white_concrete', 'm
  * stray highlight in one change, and also making the 2 rear stripes read unambiguously as the
  * *only* 2 stripes (round three's stripes were real and correctly placed, but were easy to miss
  * amid the natural wrap's other black-ish patches elsewhere on the body).
+ *
+ * **Eyes restored + stripes repositioned (round five)**: round four's "no blue/cyan block anywhere
+ * in a built bee" check was real, but wrong conclusion — the pale pixel it found *was* the real
+ * eye's highlight, not an unrelated artifact, and flattening the body to one solid color deleted it
+ * (and the eye's black outline) along with the mosaic, leaving the bee with no eyes at all. Fixed by
+ * re-decoding `bee/bee`'s real texture directly and sampling `boxElement`'s own front-face rect for
+ * this cube (u10-16,v10-16): a genuine symmetric black-outline eye pair sits at real X[-3,-2]/[2,3],
+ * Y[5,7], flush against the front face (Z=-5) — confirmed by RGB, not assumed. Two small forced-black
+ * `stretchedBox` elements were added there (same technique as the tail cap/stripes), forced solid
+ * black rather than the real pale-cyan highlight per the earlier explicit "the eye color is blue"
+ * feedback. Separately, direct luminance sampling of the real texture's top and right-side faces
+ * (u10-16,v0-9 and u0-9,v10-16) showed round three's stripe Z-positions were off by one real unit:
+ * the actual black bands sit at Z[-1,0] and Z[1,2], not Z[0,1] and Z[2,3] — the old Z[2,3] stripe had
+ * no yellow gap before the tail cap's own Z[3,5], so it visually fused into one blob instead of
+ * reading as a separate stripe. Both stripes were moved to their real positions, restoring 2 clearly
+ * separated black bands with yellow gaps on every side, per real user feedback that stripes looked
+ * missing/wrong.
  *
  * **Body palette restriction (round three, kept in round four)**: originally scoped to the body's
  * natural wrap, per the user's explicit request ("remove the usage of mangrove log and warped
@@ -747,8 +776,8 @@ function beeModel(textureKey: string): HandAuthoredTemplate {
 
   const elements = [
     bodyBand(-5, 5), // body — flattened to one solid color (BEE_YELLOW, restricted below) instead of its natural per-voxel wrap
-    bodyBand(0, 1), // rear stripe 1 — forced black below
-    bodyBand(2, 3), // rear stripe 2, flush against the tail cap — forced black below
+    bodyBand(-1, 0), // stripe 1 — forced black below
+    bodyBand(1, 2), // stripe 2 — forced black below
     bodyBand(3, 5), // tail cap — same footprint as body's rear, forced solid black below
     thickenAxis(cubeElement({ origin: [0.5, 5, 5], size: [0, 1, 2], uv: [26, 7] }, 'main'), 0, 1), // stinger, forced black below
     cubeElement({ origin: [2, 7, -8], size: [1, 2, 3], uv: [2, 0] }, 'main'), // right antenna, forced black below
@@ -765,11 +794,31 @@ function beeModel(textureKey: string): HandAuthoredTemplate {
     // Wings: hand-placed resting silhouette, not the literal (unrotated, 21-unit-wide) raw cubes — see doc above.
     stretchedBox([-7, 9, -3], [-3, 9.75, 3], rightWingRect, 'main'),
     stretchedBox([4, 9, -3], [8, 9.75, 3], leftWingRect, 'main'),
+    // Eyes (round five, corrected round six and seven): the body-flattening in round four deleted
+    // them along with the rest of the natural wrap's detail. Real texture's front (head) face —
+    // confirmed by direct pixel sampling at boxElement's own front-face rect for this cube
+    // (u10-16,v10-16) — has a genuine eye pattern sitting at the face's own outer edge columns
+    // (u10-11 and u15-16, i.e. the 2 columns nearest each side of the 7-wide face — round six had
+    // this shifted 1 column too far inward on the left eye), 3 real pixel-rows tall (v13-15, not 2 —
+    // round six's box stopped 1 row short and clipped the real bottom row): row v13 (top) is black
+    // on the outer column and a pale mint/cyan highlight on the inner column (RGB (124,201,209),
+    // matched to `stripped_warped_stem`), rows v14-15 (the other 2 rows) are solid black on both
+    // columns — i.e. the mint sits in the *top-right* cell of each eye's 2-wide×3-tall block, per a
+    // direct user-supplied reference image and a follow-up correction confirming this exact layout
+    // against the real texture at its native pixel size. `stretchedBox`'s per-voxel UV interpolation
+    // reproduces this whole pattern from the one real rect below; restricted to `BEE_EYE_PALETTE`
+    // rather than left fully unrestricted (see its doc).
+    // The rect's U order is swapped from the raw texture columns (12→10, not 10→12) to compensate
+    // for the visible face's own uFlip:true (FACE_AXES['north'] in faceGeometry.ts) — without this,
+    // the mint highlight (real col 11/15, the inner column) renders on the outer edge instead,
+    // confirmed by a real-jar render before this swap was added.
+    stretchedBox([-3, 4, -5], [-1, 7, -4], [12, 13, 10, 16], 'main'), // right eye (bee's own right, -X side, face's left edge)
+    stretchedBox([2, 4, -5], [4, 7, -4], [17, 13, 15, 16], 'main'), // left eye (bee's own left, +X side, face's right edge)
   ];
   const restrictions: Record<number, string[]> = {
     0: BEE_BODY_PALETTE, // body
-    1: BEE_BLACK_PALETTE, // rear stripe 1
-    2: BEE_BLACK_PALETTE, // rear stripe 2
+    1: BEE_BLACK_PALETTE, // stripe 1
+    2: BEE_BLACK_PALETTE, // stripe 2
     3: BEE_BLACK_PALETTE, // tail cap
     4: BEE_BLACK_PALETTE, // stinger
     5: BEE_BLACK_PALETTE, // right antenna
@@ -782,6 +831,8 @@ function beeModel(textureKey: string): HandAuthoredTemplate {
     12: BEE_DARK_BROWN_PALETTE, // 6 leg pegs
     13: BEE_WING_PALETTE,
     14: BEE_WING_PALETTE, // 2 wings
+    15: BEE_EYE_PALETTE,
+    16: BEE_EYE_PALETTE, // 2 eyes
   };
   return normalizeMobModel(elements, { main: textureKey }, restrictions);
 }
