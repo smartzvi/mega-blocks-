@@ -78,9 +78,13 @@ export function isWoodFamilySource(sourceName: string): boolean {
 // voxels — creeper's mottled green skin apparently has enough pale-green pixels to read as close to
 // froglight's own green-tinted glow. `piglin_head`/`piglin_wall_head`: `glowstone` won ~20% of a
 // built head — piglin's warm tan/orange skin tone apparently reads close to glowstone's own
-// yellow-orange glow. Both this function's targets, not sourceName strings a mob/item never uses —
-// same "pale/warm surface reads as a light-source glow" pattern as every entry above, just caught
-// during this feature's own initial verification rather than from user feedback.
+// yellow-orange glow. `barrel`: real-jar verification found `glowstone` winning 552 of a built
+// barrel's ~4300 voxels (a real ~13% share, not a stray edge pixel) — the barrel's warm oak-plank
+// tones apparently read close enough to glowstone's own yellow-orange glow, per explicit user
+// request ("dont use any glowstone" in the barrel design). Both this function's targets, not
+// sourceName strings a mob/item never uses — same "pale/warm surface reads as a light-source glow"
+// pattern as every entry above, just caught during this feature's own initial verification rather
+// than from user feedback.
 const LIGHT_SOURCE_EXCLUDED_EXACT_NAMES = new Set([
   'sheep',
   'bee',
@@ -89,6 +93,7 @@ const LIGHT_SOURCE_EXCLUDED_EXACT_NAMES = new Set([
   'creeper_wall_head',
   'piglin_head',
   'piglin_wall_head',
+  'barrel',
 ]);
 
 function isExactNameExcluded(sourceName: string): boolean {

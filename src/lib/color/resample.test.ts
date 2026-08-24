@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resampleTexture } from './resample';
+import { makeEdgesTileable, resampleTexture } from './resample';
 import type { FaceTexture } from '../../types/minecraft';
 
 function pixel(data: Uint8ClampedArray, size: number, x: number, y: number): [number, number, number, number] {
@@ -114,5 +114,83 @@ describe('resampleTexture', () => {
         expect(pixel(result.data, 64, 12 + dx, 20 + dy)).toEqual(expected);
       }
     }
+  });
+});
+
+describe('makeEdgesTileable', () => {
+  it('makes the left and right edges identical — regression test for real user feedback that two mega blocks of the same source placed side by side broke the repeating pattern instead of flowing together, traced to real vanilla textures (confirmed directly on cobblestone.png) not being designed to tile at pixel precision, only to look fine at native 1-block scale', () => {
+    const size = 8;
+    const data = new Uint8ClampedArray(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        data[i] = x * 30; // left column (x=0) far from right column (x=7) in raw color
+        data[i + 1] = 0;
+        data[i + 2] = 0;
+        data[i + 3] = 255;
+      }
+    }
+    const texture: FaceTexture = { width: size, height: size, data };
+    const result = makeEdgesTileable(texture);
+    for (let y = 0; y < size; y++) {
+      const left = pixel(result.data, size, 0, y);
+      const right = pixel(result.data, size, size - 1, y);
+      expect(left).toEqual(right); // identical, so a copy placed to the right continues seamlessly
+    }
+  });
+
+  it('makes the top and bottom edges identical too, and the blended value is the real average of the original two edges (not an arbitrary pick of one side)', () => {
+    const size = 8;
+    const data = new Uint8ClampedArray(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        data[i] = data[i + 1] = data[i + 2] = y * 30;
+        data[i + 3] = 255;
+      }
+    }
+    const texture: FaceTexture = { width: size, height: size, data };
+    const result = makeEdgesTileable(texture);
+    for (let x = 0; x < size; x++) {
+      const top = pixel(result.data, size, x, 0);
+      const bottom = pixel(result.data, size, x, size - 1);
+      expect(top).toEqual(bottom);
+      expect(top[0]).toBe(Math.round((0 + (size - 1) * 30) / 2)); // real average of the original top/bottom values
+    }
+  });
+
+  it('leaves interior pixels completely untouched — only the outermost 1-pixel ring changes, per explicit user request not to touch the colors/pattern otherwise', () => {
+    const size = 8;
+    const data = new Uint8ClampedArray(size * size * 4);
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 10;
+      data[i + 1] = 20;
+      data[i + 2] = 30;
+      data[i + 3] = 255;
+    }
+    // Make every edge pixel distinctly different from the flat interior fill, so any leak would show.
+    for (let x = 0; x < size; x++) {
+      const iTop = x * 4;
+      const iBottom = ((size - 1) * size + x) * 4;
+      data[iTop] = data[iBottom] = 200;
+      const iLeft = (x * size) * 4;
+      const iRight = (x * size + (size - 1)) * 4;
+      data[iLeft] = data[iRight] = 200;
+    }
+    const texture: FaceTexture = { width: size, height: size, data };
+    const result = makeEdgesTileable(texture);
+    for (let y = 1; y < size - 1; y++) {
+      for (let x = 1; x < size - 1; x++) {
+        expect(pixel(result.data, size, x, y)).toEqual([10, 20, 30, 255]);
+      }
+    }
+  });
+
+  it('does not mutate the input texture — callers keep their own original untouched', () => {
+    const size = 4;
+    const data = new Uint8ClampedArray(size * size * 4).fill(100);
+    const texture: FaceTexture = { width: size, height: size, data };
+    makeEdgesTileable(texture);
+    expect(texture.data).toEqual(new Uint8ClampedArray(size * size * 4).fill(100));
   });
 });

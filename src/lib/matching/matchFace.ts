@@ -2,7 +2,7 @@ import type { BlockTextureSet, FaceMatchGrid, FaceName, FaceTexture, Hsv, Lab, M
 import { FACE_NAMES } from '../../types/minecraft';
 import { deltaE, rgbToLab } from '../color/lab';
 import { hueDistance, isChromatic, rgbToHsv } from '../color/hsv';
-import { resampleTexture } from '../color/resample';
+import { makeEdgesTileable, resampleTexture } from '../color/resample';
 
 // Hues within this many degrees of the pixel's hue are treated as compatible; anything wider
 // gets a severe penalty. This is what stops e.g. green wool from ever being picked for a warm
@@ -123,7 +123,10 @@ function nearestByColor(pixelLab: Lab, palette: PaletteEntry[], face: FaceName):
 export function matchAllFaces(sourceTextures: BlockTextureSet, palette: PaletteEntry[], resolution: number): MatchedFaces {
   const result = {} as MatchedFaces;
   for (const face of FACE_NAMES) {
-    const resampled = resampleTexture(sourceTextures[face], resolution);
+    // Tileable *after* resampling, not before: resampling only changes size, but a build's real
+    // visible seam is between two whole mega blocks at the final target resolution, so that's the
+    // grid whose opposite edges need to match (see makeEdgesTileable's own doc).
+    const resampled = makeEdgesTileable(resampleTexture(sourceTextures[face], resolution));
     const facePalette = palette.filter((entry) => {
       if (entry.endGrainTopBottom && (face === 'top' || face === 'bottom')) return false;
       if (entry.gravityAffected && face === 'top') return false;

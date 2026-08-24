@@ -10,7 +10,12 @@ import type { PaletteEntry } from '../../types/minecraft';
  */
 export function isGlassFamilySource(sourceName: string): boolean {
   const bare = sourceName.toLowerCase().replace(/^minecraft:/, '');
-  return bare.includes('glass') || bare === 'beacon' || bare === 'end_crystal';
+  // `bee` is not itself glass-related, but its wings are explicitly restricted to
+  // `white_stained_glass` (handAuthoredMobTemplates.ts's `BEE_WING_PALETTE`) per direct user
+  // request for a translucent wing look — safe to make the whole bee build glass-eligible since
+  // every other bee element already has its own tight, non-glass color restriction, so only the
+  // wings can actually reach it.
+  return bare.includes('glass') || bare === 'beacon' || bare === 'end_crystal' || bare === 'bee';
 }
 
 /**

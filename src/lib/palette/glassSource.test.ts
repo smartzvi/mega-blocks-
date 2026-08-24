@@ -29,6 +29,11 @@ describe('isGlassFamilySource', () => {
     expect(isGlassFamilySource('minecraft:end_crystal')).toBe(true);
   });
 
+  it('recognizes bee — a deliberate exception for its glass-winged look, per explicit user request', () => {
+    expect(isGlassFamilySource('bee')).toBe(true);
+    expect(isGlassFamilySource('minecraft:bee')).toBe(true);
+  });
+
   it('rejects unrelated blocks, including other pale/white ones', () => {
     expect(isGlassFamilySource('white_wool')).toBe(false);
     expect(isGlassFamilySource('quartz_block')).toBe(false);

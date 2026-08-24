@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { HAND_AUTHORED_MOB_TEMPLATES } from './handAuthoredMobTemplates';
 
-const MOB_NAMES = ['pig', 'chicken', 'zombie', 'skeleton', 'snow golem', 'sheep', 'iron golem', 'panda', 'bee', 'wolf'];
+const MOB_NAMES = ['pig', 'chicken', 'zombie', 'skeleton', 'snow golem', 'sheep', 'iron golem', 'panda', 'bee', 'wolf', 'witch'];
 
 describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
-  it('has exactly the 10 starter mobs, each with a real entity texture key', () => {
+  it('has exactly the 11 starter mobs, each with a real entity texture key', () => {
     expect(Object.keys(HAND_AUTHORED_MOB_TEMPLATES).sort()).toEqual([...MOB_NAMES].sort());
     expect(HAND_AUTHORED_MOB_TEMPLATES.pig.model.textures.main).toBe('pig/temperate_pig');
     expect(HAND_AUTHORED_MOB_TEMPLATES.chicken.model.textures.main).toBe('chicken/temperate_chicken');
@@ -17,6 +17,9 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(HAND_AUTHORED_MOB_TEMPLATES.panda.model.textures.main).toBe('panda/panda');
     expect(HAND_AUTHORED_MOB_TEMPLATES.bee.model.textures.main).toBe('bee/bee');
     expect(HAND_AUTHORED_MOB_TEMPLATES.wolf.model.textures.main).toBe('wolf/wolf');
+    // Witch's real entity texture key is the bare `witch`, not `witch/witch` like most other
+    // mobs — confirmed by listing the real jar's entityTextureFiles directly, not assumed.
+    expect(HAND_AUTHORED_MOB_TEMPLATES.witch.model.textures.main).toBe('witch');
   });
 
   it('every element stays within model-space X 0-16 for every mob — rasterizeItemModel silently clips out-of-range X, so this must hold exactly (this is the real regression test for iron golem, the first mob wider than one block)', () => {
@@ -300,20 +303,35 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(heightUnits).toBeCloseTo((43 * 16) / 26, 5);
   });
 
-  it('bee has 17 elements (body + 2 stripes + tail cap + stinger + 2 antennae + 6 leg pegs + 2 wings + 2 eyes), no bind_pose_rotation needed so no scaleBounds', () => {
+  it('bee has 20 elements (body + belly band + 2 stripes + tail cap + stinger + 2 antennae + 6 leg pegs + 2 wings (inner+outer segments each) + 2 eyes), no bind_pose_rotation needed so no scaleBounds', () => {
     const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
-    expect(model.elements.length).toBe(17);
+    expect(model.elements.length).toBe(20);
+  });
+
+  it('bee\'s belly band sits directly below the body element in the array, sharing the body\'s full X/Z footprint but only the low Y range — regression test for real user feedback ("yellow and some orange in the low part of the body") that it must be layered *before* the stripes/tail cap so those still override it at their own Z slices', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
+    const [body, belly] = model.elements;
+    expect(belly.from[0]).toBeCloseTo(body.from[0], 5);
+    expect(belly.to[0]).toBeCloseTo(body.to[0], 5);
+    expect(belly.from[2]).toBeCloseTo(body.from[2], 5);
+    expect(belly.to[2]).toBeCloseTo(body.to[2], 5);
+    expect(belly.from[1]).toBeCloseTo(body.from[1], 5); // starts at the body's own bottom edge
+    expect(belly.to[1]).toBeLessThan(body.to[1]); // doesn't span the full height — only the low part
+    const uvs = Object.values(belly.faces).map((f) => f?.uv);
+    for (const uv of uvs) {
+      expect(uv).toEqual(uvs[0]); // flat stretchedBox, same rect on every face
+    }
   });
 
   it('bee\'s stinger has real physical thickness along its otherwise-zero raw geo.json X axis — regression test for a real engine limitation: rasterizeItemModel only voxelizes 3D volume, so a literal zero-thickness flat-plane cube (Bedrock\'s real double-sided-quad convention for this part) would voxelize to nothing', () => {
     const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
-    const stinger = model.elements[4];
+    const stinger = model.elements[5];
     expect(stinger.to[0] - stinger.from[0]).toBeGreaterThan(0); // thickened along X, its real zero axis
   });
 
   it('bee\'s tail cap sits flush against the body\'s rear edge, sharing its X/Y footprint — regression test for real user feedback that the rear section must read as a distinct solid-black band, not blended into the body', () => {
     const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
-    const [body, , , tailCap] = model.elements;
+    const [body, , , , tailCap] = model.elements;
     expect(tailCap.from[0]).toBeCloseTo(body.from[0], 5);
     expect(tailCap.to[0]).toBeCloseTo(body.to[0], 5);
     expect(tailCap.from[1]).toBeCloseTo(body.from[1], 5);
@@ -323,7 +341,7 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
 
   it('bee\'s stinger protrudes directly backward from the tail cap\'s own back edge, centered on X — regression test for "stinger must come from the center-back of the black rear section"', () => {
     const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
-    const [body, , , tailCap, stinger] = model.elements;
+    const [body, , , , tailCap, stinger] = model.elements;
     expect(stinger.from[2]).toBeCloseTo(tailCap.to[2], 5); // starts exactly where the tail cap ends
     expect(stinger.to[2]).toBeGreaterThan(tailCap.to[2]); // extends backward beyond it
     const bodyCenterX = (body.from[0] + body.to[0]) / 2;
@@ -333,7 +351,7 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
 
   it('bee\'s 2 stripes sit at their real texture-verified Z positions (Z[-1,0] and Z[1,2]), each separated from its neighbors by a real yellow gap — regression test for direct luminance sampling of the real bee/bee texture\'s top and side faces, which found the previous Z[0,1]/Z[2,3] placement off by one real unit (the old Z[2,3] stripe had no gap before the tail cap, fusing into one blob instead of reading as 2 separate stripes)', () => {
     const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
-    const [body, stripe1, stripe2, tailCap] = model.elements;
+    const [body, , stripe1, stripe2, tailCap] = model.elements;
     for (const stripe of [stripe1, stripe2]) {
       // Share the body's X/Y footprint (full-width bands, not narrow patches).
       expect(stripe.from[0]).toBeCloseTo(body.from[0], 5);
@@ -352,7 +370,7 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
 
   it('bee\'s 6 leg pegs are small, individually isolated 1x2x1 boxes hugging the body\'s left/right X edges — regression test for a real bug: the original full-width flat leg bars mostly hollowed out under this app\'s universal edge-culling once sandwiched against the body and each other', () => {
     const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
-    const legs = model.elements.slice(7, 13);
+    const legs = model.elements.slice(8, 14);
     expect(legs.length).toBe(6);
     for (const leg of legs) {
       expect(leg.to[0] - leg.from[0]).toBeCloseTo(1, 5);
@@ -382,46 +400,70 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(body.to[2] - body.from[2]).toBeCloseTo(10, 5);
   });
 
-  it('bee\'s body, stripes, tail cap, stinger, antennae, and leg pegs are all restricted to their requested curated colors (a curated on-theme palette for the body; solid black for the rear/stinger/antennae; dark-brown for legs) rather than the unrestricted shared palette', () => {
+  it('bee\'s body, belly band, stripes, tail cap, stinger, antennae, and leg pegs are all restricted to their requested curated colors (a curated on-theme palette for the body/belly; solid black for the rear/stinger/antennae; dark-brown for legs) rather than the unrestricted shared palette', () => {
     const { elementPaletteRestrictions } = HAND_AUTHORED_MOB_TEMPLATES.bee;
     const black = ['minecraft:black_concrete', 'minecraft:black_wool', 'minecraft:black_terracotta'];
     const darkBrown = ['minecraft:brown_terracotta', 'minecraft:brown_concrete'];
-    expect(elementPaletteRestrictions?.[0]).toEqual([
+    const bodyPalette = [
       'minecraft:yellow_wool', 'minecraft:yellow_concrete', 'minecraft:yellow_terracotta',
       'minecraft:white_wool', 'minecraft:black_wool', 'minecraft:black_concrete',
       'minecraft:black_terracotta', 'minecraft:brown_terracotta', 'minecraft:brown_concrete',
-      'minecraft:orange_terracotta', 'minecraft:red_sandstone', 'minecraft:bamboo_planks',
-    ]);
-    // Body's allow-list must not contain the two blocks the user asked to remove entirely.
+      'minecraft:orange_terracotta', 'minecraft:red_sandstone',
+    ];
+    expect(elementPaletteRestrictions?.[0]).toEqual(bodyPalette);
+    expect(elementPaletteRestrictions?.[1]).toEqual(bodyPalette); // belly band shares the body's allow-list
+    // Body's allow-list must not contain bamboo_planks (removed per explicit user request — it was
+    // winning 377 of the body's ~1050 voxels, reading as a flat pale tan rather than vivid yellow)
+    // or the two blocks an earlier round asked to remove entirely.
+    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:bamboo_planks');
     expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:mangrove_log');
     expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:warped_stem');
     expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:stripped_warped_stem');
     // Body's allow-list must include black_wool, the requested replacement for warped_stem.
     expect(elementPaletteRestrictions?.[0]).toContain('minecraft:black_wool');
-    for (const i of [1, 2, 3, 4, 5, 6]) {
-      expect(elementPaletteRestrictions?.[i]).toEqual(black); // rear stripes, tail cap, stinger, antennae
+    for (const i of [2, 3, 4, 5, 6, 7]) {
+      expect(elementPaletteRestrictions?.[i]).toEqual(black); // stripes, tail cap, stinger, antennae
     }
-    for (const i of [7, 8, 9, 10, 11, 12]) {
+    for (const i of [8, 9, 10, 11, 12, 13]) {
       expect(elementPaletteRestrictions?.[i]).toEqual(darkBrown); // 6 leg pegs
     }
     // Wings are restricted to plain pale/neutral tones — a regression test for real-jar
     // verification showing mangrove_log still appearing via the wings' small real UV patch even
     // after the body was restricted (the wings were the only remaining unrestricted element).
-    const wingPalette = ['minecraft:white_wool', 'minecraft:white_concrete', 'minecraft:light_gray_wool', 'minecraft:light_gray_concrete'];
-    expect(elementPaletteRestrictions?.[13]).toEqual(wingPalette);
-    expect(elementPaletteRestrictions?.[14]).toEqual(wingPalette);
+    // `white_wool` was swapped for `white_stained_glass` (round ten) per explicit user request.
+    const wingPalette = ['minecraft:white_stained_glass', 'minecraft:white_concrete', 'minecraft:light_gray_wool'];
+    for (const i of [14, 15, 16, 17]) {
+      expect(elementPaletteRestrictions?.[i]).toEqual(wingPalette); // inner + outer segments, both wings
+    }
     // Eyes are restricted to black + a curated mint/cyan highlight allow-list (round six) — the
     // real eye pixel data includes a genuine pale mint highlight, confirmed against a direct
     // user-supplied reference image, not just plain black.
     const eyePalette = [...black, 'minecraft:stripped_warped_stem', 'minecraft:light_blue_wool', 'minecraft:cyan_wool'];
-    expect(elementPaletteRestrictions?.[15]).toEqual(eyePalette);
-    expect(elementPaletteRestrictions?.[16]).toEqual(eyePalette);
+    expect(elementPaletteRestrictions?.[18]).toEqual(eyePalette);
+    expect(elementPaletteRestrictions?.[19]).toEqual(eyePalette);
+  });
+
+  it('bee\'s 2 eyes carry the mint+black rect on exactly one face (the real visible front) and a plain black-only rect on every other face, including their own thin side faces — regression test for real user feedback ("teal color line on the side... when i make big sizes"): `stretchedBox` gave every face the identical rect, which leaked the mint highlight onto the eye box\'s own east/west side faces once resolution was high enough to expose that thin sliver', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
+    for (const eye of model.elements.slice(18, 20)) {
+      const { top, bottom, north, south, east, west } = eye.faces;
+      const blackRect = top?.uv;
+      expect(bottom?.uv).toEqual(blackRect);
+      expect(east?.uv).toEqual(blackRect);
+      expect(west?.uv).toEqual(blackRect);
+      // Exactly one of north/south differs from the plain-black rect (the real visible front,
+      // post file-wide mirrorFrontBack); the other matches it like every other non-front face.
+      const frontFaces = [north?.uv, south?.uv].filter((uv) => uv !== undefined);
+      expect(frontFaces).toHaveLength(2);
+      const distinctFromBlack = frontFaces.filter((uv) => JSON.stringify(uv) !== JSON.stringify(blackRect));
+      expect(distinctFromBlack).toHaveLength(1);
+    }
   });
 
   it('bee\'s 2 eyes sit symmetrically at the outer edge columns of the front (head) face, 3 real units tall, restored after round four\'s body-flattening had deleted them (round six/seven) — regression test for real user feedback ("it doesn\'t have eyes", then a reference image showing the real 2-tone look, then a follow-up correction on the real texture\'s exact 3-row height and edge-column position) and for direct pixel sampling of the real bee/bee texture\'s front-face rect (u10-16,v10-16)', () => {
     const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
     const body = model.elements[0];
-    const [rightEye, leftEye] = model.elements.slice(15, 17);
+    const [rightEye, leftEye] = model.elements.slice(18, 20);
     // Flush against the body's own front face.
     expect(rightEye.from[2]).toBeCloseTo(body.from[2], 5);
     expect(leftEye.from[2]).toBeCloseTo(body.from[2], 5);
@@ -441,10 +483,24 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
   it('bee\'s two wings are placed symmetrically on either side of the body, not overlapping it or each other', () => {
     const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
     const body = model.elements[0];
-    const [rightWing, leftWing] = model.elements.slice(13, 15);
-    expect(rightWing.to[0] - rightWing.from[0]).toBe(leftWing.to[0] - leftWing.from[0]); // same size
-    expect(rightWing.to[0]).toBeLessThanOrEqual(body.from[0]); // right wing sits left of the body
-    expect(leftWing.from[0]).toBeGreaterThanOrEqual(body.to[0]); // left wing sits right of the body
+    const [rightInner, rightOuter, leftInner, leftOuter] = model.elements.slice(14, 18);
+    expect(rightInner.to[0] - rightInner.from[0] + (rightOuter.to[0] - rightOuter.from[0]))
+      .toBe(leftInner.to[0] - leftInner.from[0] + (leftOuter.to[0] - leftOuter.from[0])); // same total span
+    expect(rightInner.to[0]).toBeLessThanOrEqual(body.from[0]); // right wing sits left of the body
+    expect(leftInner.from[0]).toBeGreaterThanOrEqual(body.to[0]); // left wing sits right of the body
+  });
+
+  it('bee\'s wings are angled upward via a stepped 2-segment rise (round ten) — regression test for real user feedback ("change the structure of the wings... angled... up") on a voxel-grid engine that can\'t represent a literal diagonal tilt: the outer segment (the wingtip, farther from the body) sits at a real Y range strictly higher than the inner segment (flush with the body\'s back edge), and continues outward from where the inner segment ends rather than overlapping it', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.bee;
+    const [rightInner, rightOuter, leftInner, leftOuter] = model.elements.slice(14, 18);
+    for (const [inner, outer] of [[rightInner, rightOuter], [leftInner, leftOuter]] as const) {
+      expect(outer.from[1]).toBeCloseTo(inner.to[1], 5); // outer starts exactly where inner's height ends
+      expect(outer.to[1]).toBeGreaterThan(inner.to[1]); // and rises higher
+      expect(outer.to[1] - outer.from[1]).toBeCloseTo(inner.to[1] - inner.from[1], 5); // same thickness
+    }
+    // Outer continues outward (away from the body) from the inner segment, not overlapping it.
+    expect(rightOuter.to[0]).toBeCloseTo(rightInner.from[0], 5);
+    expect(leftOuter.from[0]).toBeCloseTo(leftInner.to[0], 5);
   });
 
   it('bee stays within the 0-16 model-space X ceiling without needing scaleBounds — its real raw wingspan (21 units, wings spread flat with rotation ignored) would have exceeded it, which is exactly why the wings were hand-repositioned instead of transcribed literally', () => {
@@ -536,10 +592,19 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     for (const i of [0, 5, 6, 7, 8, 9]) {
       expect(elementPaletteRestrictions?.[i]).toEqual(furPalette);
     }
-    // Ears and snout are NOT restricted — no evidence they had the same problem.
-    for (const i of [2, 3, 4]) {
+    // Ears are NOT restricted — no evidence they had the same problem.
+    for (const i of [2, 3]) {
       expect(elementPaletteRestrictions?.[i]).toBeUndefined();
     }
+  });
+
+  it('wolf\'s snout is restricted to the fur palette plus black (round six) — regression test for real jar verification finding dripstone_block/gray_concrete winning a real share of the snout\'s unrestricted pixels, per explicit user request ("change the usage of dripstone for something else" in the dog mega size)', () => {
+    const { elementPaletteRestrictions } = HAND_AUTHORED_MOB_TEMPLATES.wolf;
+    const snoutPalette = elementPaletteRestrictions?.[4];
+    expect(snoutPalette).toContain('minecraft:black_concrete'); // keeps the real nose-tip pixel
+    expect(snoutPalette).toContain('minecraft:white_wool');
+    expect(snoutPalette).toContain('minecraft:light_gray_wool');
+    expect(snoutPalette).not.toContain('minecraft:dripstone_block');
   });
 
   it('wolf\'s upperBody fully contains the rear legs\' real Z-footprint, matching how the front legs are already fully contained — regression test for real user feedback across two rounds: round four\'s 1-unit extendBack only covered half the rear legs\' own 2-unit width (a real, if partial, floating-leg complaint that persisted); round five increased it to 2.5 so the whole rear leg width sits inside upperBody\'s range, the same standard the front legs already had via extendFront', () => {
@@ -555,5 +620,89 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(headPalette).toContain('minecraft:black_concrete');
     expect(headPalette).toContain('minecraft:white_wool');
     expect(headPalette).toContain('minecraft:light_gray_wool');
+  });
+
+  it('witch has 15 elements (robe + green stripe + head + nose + arm plank + 2 upper arms + 2 forearms + 2 legs + 4 hat tiers) — the real undertunic cube beneath the robe is dropped, fully contained and never visible (same situation wolf\'s redundant body slice was in), and no bind_pose_rotation exists anywhere in the real villager/witch geo.json so no scaleBounds/rotatedBodyElement needed', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.witch;
+    expect(model.elements.length).toBe(15);
+  });
+
+  it('witch\'s legs touch the ground and every other part stacks sensibly above them (legs → robe → head → hat), matching the real villager/witch geo.json\'s own Y ordering', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.witch;
+    const [robe, , head, , , , , , , leftLeg, , hatBrim] = model.elements;
+    expect(model.elements.some((el) => el.from[1] === 0)).toBe(true); // legs touch the ground
+    expect(robe.from[1]).toBeGreaterThanOrEqual(leftLeg.from[1]); // robe sits at/above the legs' own base
+    expect(head.from[1]).toBeGreaterThanOrEqual(robe.to[1] - 1); // head sits at/near the robe's top (real geo overlap is small)
+    expect(hatBrim.from[1]).toBeGreaterThanOrEqual(head.from[1]); // hat sits on/above the head, not below it
+  });
+
+  it('witch\'s green center stripe sits flush on the robe\'s own front face, centered in X and spanning most of its height — regression test for direct pixel sampling of the real robe texture finding a genuine, deliberately-painted 2-column-wide green stripe (not noise) that the original single-element flat body had no way to show', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.witch;
+    const [robe, stripe] = model.elements;
+    expect(stripe.from[2]).toBeCloseTo(robe.from[2], 5); // flush with the robe's own front
+    const robeCenterX = (robe.from[0] + robe.to[0]) / 2;
+    expect((stripe.from[0] + stripe.to[0]) / 2).toBeCloseTo(robeCenterX, 5); // centered
+    expect(stripe.to[0] - stripe.from[0]).toBeLessThan(robe.to[0] - robe.from[0]); // narrower than the whole robe
+  });
+
+  it('witch\'s arms are 2 segments each (upper arm + forearm) approximating crossed arms — round two, per explicit user request that the base geo.json\'s straight-hanging arms are wrong and this was a hard requirement, not optional. The forearm sits at a real Z strictly in front of the upper arm/robe (bending forward) and reaches toward the body\'s center (bending inward), the same segmented-approximation technique the bee\'s angled-up wings use for a similarly un-rotatable real pose', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.witch;
+    const [robe, , , , , leftUpper, rightUpper, leftForearm, rightForearm] = model.elements;
+    for (const [upper, forearm] of [[leftUpper, leftForearm], [rightUpper, rightForearm]] as const) {
+      expect(forearm.from[2]).toBeLessThan(upper.from[2]); // forearm bends forward, in front of the upper arm
+      expect(forearm.from[2]).toBeLessThan(robe.from[2]); // and in front of the robe's own front face
+      expect(forearm.to[1]).toBeCloseTo(upper.from[1], 5); // forearm picks up exactly where the upper arm ends
+    }
+    // Forearms reach toward the center and overlap there, reading as crossed rather than just bent.
+    expect(leftForearm.to[0]).toBeGreaterThan(rightForearm.from[0]);
+  });
+
+  it('witch\'s arms span the full real 16-unit X width (real X -8 to 8) — fits this engine\'s ceiling exactly without needing scaleBounds, confirmed by checking every element\'s bounds stay within 0-16 after normalizeMobModel\'s shift', () => {
+    const { model } = HAND_AUTHORED_MOB_TEMPLATES.witch;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (const el of model.elements) {
+      minX = Math.min(minX, el.from[0], el.to[0]);
+      maxX = Math.max(maxX, el.from[0], el.to[0]);
+    }
+    expect(minX).toBe(0);
+    expect(maxX).toBe(16);
+  });
+
+  it('witch\'s robe, stripe, arm plank, and both arm segments are restricted to their requested curated colors (purple for the robe/arms even though real raw color is objectively closer to blue_terracotta — a deliberate override for witch\'s single most iconic real-world trait; green for the stripe) rather than the unrestricted shared palette', () => {
+    const { elementPaletteRestrictions } = HAND_AUTHORED_MOB_TEMPLATES.witch;
+    const robePalette = ['minecraft:purple_terracotta', 'minecraft:purple_concrete', 'minecraft:purple_wool'];
+    for (const i of [0, 4, 5, 6, 7, 8]) {
+      expect(elementPaletteRestrictions?.[i]).toEqual(robePalette); // robe, arm plank, 2 upper arms, 2 forearms
+    }
+    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:blue_terracotta');
+    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:blue_concrete');
+    expect(elementPaletteRestrictions?.[1]).toEqual(['minecraft:green_concrete', 'minecraft:lime_concrete']); // stripe
+  });
+
+  it('witch\'s legs are restricted to plain brown tones (not the wood-grain/stone-family scatter their natural per-voxel wrap picked up: dark_oak_log, stripped_dark_oak_log, tuff, andesite, deepslate_tiles, mud all appeared in real-jar verification), and the head is restricted to skin tone plus black/white so the real eyebrow and eye pixels survive instead of being forced into a uniform gray', () => {
+    const { elementPaletteRestrictions } = HAND_AUTHORED_MOB_TEMPLATES.witch;
+    const legPalette = ['minecraft:brown_terracotta', 'minecraft:brown_concrete'];
+    for (const i of [9, 10]) {
+      expect(elementPaletteRestrictions?.[i]).toEqual(legPalette);
+    }
+    const headPalette = elementPaletteRestrictions?.[2];
+    expect(headPalette).toContain('minecraft:packed_mud'); // real skin tone
+    expect(headPalette).toContain('minecraft:black_concrete'); // eyebrow
+    expect(headPalette).toContain('minecraft:white_wool'); // eye
+    expect(headPalette).not.toContain('minecraft:dripstone_block');
+    expect(headPalette).not.toContain('minecraft:dark_oak_log');
+  });
+
+  it('witch\'s hat brim, tier 3, and tip are restricted to plain black, but tier 2 gets its own black+green allow-list instead — regression test for direct pixel sampling finding a genuine symmetric 5×4 diamond of bright green pixels on tier 2 specifically (a real gem, not noise: round one\'s real-jar verification did see stray green there but misread it as noise and restricted it away along with the other, genuinely plain-black, tiers)', () => {
+    const { elementPaletteRestrictions } = HAND_AUTHORED_MOB_TEMPLATES.witch;
+    const hatPalette = ['minecraft:black_concrete', 'minecraft:black_wool', 'minecraft:black_terracotta'];
+    for (const i of [11, 13, 14]) {
+      expect(elementPaletteRestrictions?.[i]).toEqual(hatPalette);
+    }
+    const tier2Palette = elementPaletteRestrictions?.[12];
+    expect(tier2Palette).toEqual(expect.arrayContaining(hatPalette));
+    expect(tier2Palette).toContain('minecraft:green_concrete');
+    expect(elementPaletteRestrictions?.[3]).toBeUndefined(); // nose
   });
 });

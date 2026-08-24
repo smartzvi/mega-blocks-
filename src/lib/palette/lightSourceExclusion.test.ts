@@ -110,6 +110,11 @@ describe('filterLightSourcesForSource', () => {
     }
   });
 
+  it('strips lightSource entries for barrel — regression test for real jar verification finding glowstone winning ~13% of a built barrel\'s voxels, per explicit user request', () => {
+    expect(filterLightSourcesForSource(palette, 'barrel')).toEqual([stone]);
+    expect(filterLightSourcesForSource(palette, 'minecraft:barrel')).toEqual([stone]);
+  });
+
   it('strips lightSource entries for a bed-family source (e.g. froglight no longer used in bed pillows/blankets)', () => {
     expect(filterLightSourcesForSource(palette, 'red_bed')).toEqual([stone]);
     expect(filterLightSourcesForSource(palette, 'minecraft:white_bed')).toEqual([stone]);

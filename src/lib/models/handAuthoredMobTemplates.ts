@@ -587,6 +587,10 @@ const BEE_BLACK_PALETTE = ['minecraft:black_concrete', 'minecraft:black_wool', '
 // flat `stretchedBox` (see `BEE_YELLOW`/`bodyBand` below): with a single small sampled rect, the
 // matched color is nearly constant regardless of resource pack, but restricting still guarantees
 // it lands on a real on-theme yellow rather than whatever's raw-closest in an unfamiliar pack.
+// `bamboo_planks` was removed (round eight) per explicit user request — real-jar verification
+// found it winning 377 of the body's ~1050 voxels (spread across nearly the whole height, not just
+// a small corner), reading as a flat pale tan rather than the vivid yellow the user wanted; with it
+// gone, `BEE_YELLOW`'s sampled color matches `yellow_wool` cleanly on every face instead.
 const BEE_BODY_PALETTE = [
   'minecraft:yellow_wool',
   'minecraft:yellow_concrete',
@@ -599,8 +603,19 @@ const BEE_BODY_PALETTE = [
   'minecraft:brown_concrete',
   'minecraft:orange_terracotta',
   'minecraft:red_sandstone',
-  'minecraft:bamboo_planks',
 ];
+
+// A real, verified rect for the belly band (round eight, widened round nine). The initial version
+// sampled only 1 real pixel row (v16), which — since a single-row rect barely varies vertically
+// when stretched across the belly's own height — read as one flat, "bulky" solid-colored mass
+// rather than a gradient, per explicit user feedback ("more change in the colors... its too
+// bulky"). Widened to 5 real rows (v12-16), using only the *center* 3 columns (u12-14, not the
+// full u10-16 the eyes also occupy) since rows v13-15's outer columns (u10-11/u15-16) are the real
+// eye's own black-outline pixels — including those would smear dark streaks along the belly's
+// entire length. The center columns are confirmed clean across all 5 rows: pure bright yellow
+// (v12-14, RGB ~237,195,67) transitioning to yellow-orange (v15, ~228,174,59) to orange-brown
+// (v16, ~208,142,72) — a real 3-stage gradient instead of one flat tone.
+const BEE_BELLY_RECT: [number, number, number, number] = [12, 12, 15, 17];
 
 // A confirmed clean, solid golden-yellow patch from the real `bee/bee` texture (decoded directly:
 // UV rows v6-v9 within the body's own top-face region are uniformly warm yellow, RGB roughly
@@ -617,8 +632,12 @@ const BEE_YELLOW: [number, number, number, number] = [10, 7, 17, 9];
 // bee (the only unrestricted element left that could produce it): the wings' small real UV patch
 // apparently contains an edge/shadow pixel whose raw color lands closer to mangrove_log than to
 // any pale candidate. Restricted to plain pale/neutral tones — a real bee's wings are translucent
-// white-gray, not brown — so no off-theme wood block can win there either.
-const BEE_WING_PALETTE = ['minecraft:white_wool', 'minecraft:white_concrete', 'minecraft:light_gray_wool', 'minecraft:light_gray_concrete'];
+// white-gray, not brown — so no off-theme wood block can win there either. `white_wool` was
+// swapped for `white_stained_glass` (round ten) per explicit user request — a genuinely
+// translucent-reading block fits a real insect wing's look better than opaque wool. Requires `bee`
+// in `isGlassFamilySource` (glassSource.ts) since glass is stripped from non-glass-family builds by
+// default; see that entry's own comment for why it's safe here.
+const BEE_WING_PALETTE = ['minecraft:white_stained_glass', 'minecraft:white_concrete', 'minecraft:light_gray_wool'];
 
 // Curated allow-list for the eyes (round six): per direct user-supplied reference image, the real
 // eye isn't solid black — it has a small pale mint/cyan highlight pixel (the same real pixel round
@@ -762,12 +781,44 @@ const BEE_EYE_PALETTE = [...BEE_BLACK_PALETTE, 'minecraft:stripped_warped_stem',
  * verification showed `mangrove_log` still appearing — the wings were the only remaining
  * unrestricted element, so their small real UV patch (likely an edge/shadow pixel) was the source.
  * Restricted to `BEE_WING_PALETTE` (plain pale/neutral tones) for the same reason as the body.
+ *
+ * **Wings angled upward + glass (round ten)**: per explicit user request ("change the structure of
+ * the wings... angled... up"), each wing is now 2 stacked segments instead of 1 flat slab — an
+ * inner segment at the original height (flush with the body's back edge) and an outer segment
+ * raised up by the same 0.75-unit thickness, reading as the wingtip lifting upward rather than
+ * lying perfectly flat. Still axis-aligned boxes (a real diagonal tilt isn't representable in this
+ * voxel-grid engine, per the rotation note above) — a stepped rise is the same kind of approximation
+ * already used elsewhere in this file for parts that can't be literally transcribed. Also per
+ * explicit request ("switch the wool color for white stained glass"), `BEE_WING_PALETTE`'s
+ * `white_wool` entry was replaced with `white_stained_glass` — which required adding `bee` to
+ * `isGlassFamilySource` (glassSource.ts) specifically for this, since glass is stripped from every
+ * non-glass-family build's palette by default; safe here because every other bee element already
+ * has its own tight color restriction, so only the wings can actually reach it.
  */
 function beeModel(textureKey: string): HandAuthoredTemplate {
   const rightWingRect: [number, number, number, number] = [6, 18, 15, 24]; // real uv:[0,18] top-face rect (u+dz,v)-(u+dz+dx,v+dz)
   const leftWingRect: [number, number, number, number] = [15, 24, 24, 30]; // real uv:[9,24] top-face rect
 
   const leg = (x0: number, z0: number) => cubeElement({ origin: [x0, 0, z0], size: [1, 2, 1], uv: [26, 1] }, 'main');
+  // A confirmed pure-black single real pixel (row v15, RGB (30,30,40)) — safe to use on any face
+  // that must read as plain black regardless of resource pack.
+  const BEE_EYE_BLACK_RECT: [number, number, number, number] = [10, 15, 11, 16];
+  // Builds an eye box whose real front face carries the mint+black `frontRect`, while every other
+  // face (crucially including its own thin east/west sides) carries the plain black rect above.
+  // `stretchedBox` gives every face the identical rect, which leaked the mint highlight onto the
+  // eye box's own side faces once resolution was high enough to expose that thin sliver — confirmed
+  // via a real-jar render showing a stray ~1-real-unit-tall mint line on the eye's outer edge, per
+  // explicit user feedback ("teal color line on the side... when i make big sizes"). The front rect
+  // goes on the pre-mirror `south` key specifically: `normalizeMobModel`'s file-wide
+  // `mirrorFrontBack` swaps north<->south for every element, and `boxElement`'s own front-face
+  // formula (confirmed via the body's real front-face pixel sampling, elsewhere in this file)
+  // already uses `south` for its front content — so content authored here under `south` ends up on
+  // the actual visible front after that swap, matching the same convention.
+  const eyeElement = (from: [number, number, number], to: [number, number, number], frontRect: [number, number, number, number]): BlockModelElement => {
+    const blackDef = { uv: BEE_EYE_BLACK_RECT, texture: '#main' };
+    const frontDef = { uv: frontRect, texture: '#main' };
+    return { from, to, faces: { top: blackDef, bottom: blackDef, south: frontDef, north: blackDef, east: blackDef, west: blackDef } };
+  };
   // Body-footprint bands (stretchedBox — see doc above), all sharing the body's own real X/Y
   // range; only their Z slice and sampled rect differ. The stripe/cap bands' rect is irrelevant
   // (any valid uv works) since their palette restriction below forces black regardless — passed
@@ -776,12 +827,23 @@ function beeModel(textureKey: string): HandAuthoredTemplate {
 
   const elements = [
     bodyBand(-5, 5), // body — flattened to one solid color (BEE_YELLOW, restricted below) instead of its natural per-voxel wrap
+    // Belly band (round eight): the body's own low Y range, full X/Z footprint, sourced from
+    // BEE_BELLY_RECT's real orange-yellow gradient instead of the flat BEE_YELLOW the rest of the
+    // body uses. Placed right after the body (before the stripes/tail cap below) so those Z-bands —
+    // which still span the body's full Y[2,9] range — keep overriding their own Z slices at every
+    // height, same as they already override the plain body; only the Z ranges *not* covered by a
+    // stripe or the tail cap actually show the belly's tone.
+    stretchedBox([-3, 2, -5], [4, 4, 5], BEE_BELLY_RECT, 'main'),
     bodyBand(-1, 0), // stripe 1 — forced black below
     bodyBand(1, 2), // stripe 2 — forced black below
     bodyBand(3, 5), // tail cap — same footprint as body's rear, forced solid black below
     thickenAxis(cubeElement({ origin: [0.5, 5, 5], size: [0, 1, 2], uv: [26, 7] }, 'main'), 0, 1), // stinger, forced black below
-    cubeElement({ origin: [2, 7, -8], size: [1, 2, 3], uv: [2, 0] }, 'main'), // right antenna, forced black below
-    cubeElement({ origin: [-2, 7, -8], size: [1, 2, 3], uv: [2, 3] }, 'main'), // left antenna, forced black below
+    // Antennae lowered 1 unit (round nine, Y origin 7→6) per explicit user request ("lower the
+    // tentacles by one block down so it wont connect to the head") — at the real geo.json's own
+    // Y[7,9], their base sat flush against the body's own top edge (also Y9), reading as fused into
+    // the head's silhouette instead of a visibly separate protruding piece.
+    cubeElement({ origin: [2, 6, -8], size: [1, 2, 3], uv: [2, 0] }, 'main'), // right antenna, forced black below
+    cubeElement({ origin: [-2, 6, -8], size: [1, 2, 3], uv: [2, 3] }, 'main'), // left antenna, forced black below
     // 6 clean, isolated leg pegs (2 per Z-depth, hugging the body's left/right X edges) — not the
     // original full-width flat bars, which mostly hollowed out under this app's universal
     // edge-culling once sandwiched against the body and each other. All forced dark-brown below.
@@ -791,9 +853,14 @@ function beeModel(textureKey: string): HandAuthoredTemplate {
     leg(3, -0.5), // mid-right
     leg(-3, 1.5), // back-left
     leg(3, 1.5), // back-right
-    // Wings: hand-placed resting silhouette, not the literal (unrotated, 21-unit-wide) raw cubes — see doc above.
-    stretchedBox([-7, 9, -3], [-3, 9.75, 3], rightWingRect, 'main'),
-    stretchedBox([4, 9, -3], [8, 9.75, 3], leftWingRect, 'main'),
+    // Wings: hand-placed resting silhouette, not the literal (unrotated, 21-unit-wide) raw cubes —
+    // see doc above. Each wing is now an inner segment (flush with the body's back edge, at the
+    // original height) plus an outer segment raised 0.75 units higher, approximating an upward
+    // angle with a stepped rise (round ten, per explicit user request).
+    stretchedBox([-5, 9, -3], [-3, 9.75, 3], rightWingRect, 'main'), // right wing, inner segment
+    stretchedBox([-7, 9.75, -3], [-5, 10.5, 3], rightWingRect, 'main'), // right wing, raised outer segment
+    stretchedBox([4, 9, -3], [6, 9.75, 3], leftWingRect, 'main'), // left wing, inner segment
+    stretchedBox([6, 9.75, -3], [8, 10.5, 3], leftWingRect, 'main'), // left wing, raised outer segment
     // Eyes (round five, corrected round six and seven): the body-flattening in round four deleted
     // them along with the rest of the natural wrap's detail. Real texture's front (head) face —
     // confirmed by direct pixel sampling at boxElement's own front-face rect for this cube
@@ -807,32 +874,38 @@ function beeModel(textureKey: string): HandAuthoredTemplate {
     // direct user-supplied reference image and a follow-up correction confirming this exact layout
     // against the real texture at its native pixel size. `stretchedBox`'s per-voxel UV interpolation
     // reproduces this whole pattern from the one real rect below; restricted to `BEE_EYE_PALETTE`
-    // rather than left fully unrestricted (see its doc).
+    // rather than left fully unrestricted (see its doc). Positioned at real Y[3,6] (round eight) —
+    // shifted 1 unit down from the real texture's own Y[4,7] per explicit user request ("lower the
+    // eyes a little, not all the way down") — a deliberate stylistic placement, not a texture-
+    // accuracy fix like the rest of this element's history.
     // The rect's U order is swapped from the raw texture columns (12→10, not 10→12) to compensate
     // for the visible face's own uFlip:true (FACE_AXES['north'] in faceGeometry.ts) — without this,
     // the mint highlight (real col 11/15, the inner column) renders on the outer edge instead,
     // confirmed by a real-jar render before this swap was added.
-    stretchedBox([-3, 4, -5], [-1, 7, -4], [12, 13, 10, 16], 'main'), // right eye (bee's own right, -X side, face's left edge)
-    stretchedBox([2, 4, -5], [4, 7, -4], [17, 13, 15, 16], 'main'), // left eye (bee's own left, +X side, face's right edge)
+    eyeElement([-3, 3, -5], [-1, 6, -4], [12, 13, 10, 16]), // right eye (bee's own right, -X side, face's left edge)
+    eyeElement([2, 3, -5], [4, 6, -4], [17, 13, 15, 16]), // left eye (bee's own left, +X side, face's right edge)
   ];
   const restrictions: Record<number, string[]> = {
     0: BEE_BODY_PALETTE, // body
-    1: BEE_BLACK_PALETTE, // stripe 1
-    2: BEE_BLACK_PALETTE, // stripe 2
-    3: BEE_BLACK_PALETTE, // tail cap
-    4: BEE_BLACK_PALETTE, // stinger
-    5: BEE_BLACK_PALETTE, // right antenna
-    6: BEE_BLACK_PALETTE, // left antenna
-    7: BEE_DARK_BROWN_PALETTE,
+    1: BEE_BODY_PALETTE, // belly band
+    2: BEE_BLACK_PALETTE, // stripe 1
+    3: BEE_BLACK_PALETTE, // stripe 2
+    4: BEE_BLACK_PALETTE, // tail cap
+    5: BEE_BLACK_PALETTE, // stinger
+    6: BEE_BLACK_PALETTE, // right antenna
+    7: BEE_BLACK_PALETTE, // left antenna
     8: BEE_DARK_BROWN_PALETTE,
     9: BEE_DARK_BROWN_PALETTE,
     10: BEE_DARK_BROWN_PALETTE,
     11: BEE_DARK_BROWN_PALETTE,
-    12: BEE_DARK_BROWN_PALETTE, // 6 leg pegs
-    13: BEE_WING_PALETTE,
-    14: BEE_WING_PALETTE, // 2 wings
-    15: BEE_EYE_PALETTE,
-    16: BEE_EYE_PALETTE, // 2 eyes
+    12: BEE_DARK_BROWN_PALETTE,
+    13: BEE_DARK_BROWN_PALETTE, // 6 leg pegs
+    14: BEE_WING_PALETTE,
+    15: BEE_WING_PALETTE,
+    16: BEE_WING_PALETTE,
+    17: BEE_WING_PALETTE, // 2 wings, inner + outer segments each
+    18: BEE_EYE_PALETTE,
+    19: BEE_EYE_PALETTE, // 2 eyes
   };
   return normalizeMobModel(elements, { main: textureKey }, restrictions);
 }
@@ -945,9 +1018,12 @@ const WOLF_TAIL_FUR_RECT: [number, number, number, number] = [9, 20, 11, 22];
 // terracotta instead, which reads as soft fur rather than a building material.
 const WOLF_FUR_PALETTE = ['minecraft:white_wool', 'minecraft:light_gray_wool', 'minecraft:white_terracotta', 'minecraft:light_gray_terracotta'];
 
-// Same as WOLF_FUR_PALETTE plus black — the head is the one fur-restricted element that also needs
-// to keep matching the real dark eye pixels its natural UV wrap contains (see round three's eye-
-// color fix above); every other fur element (upperBody, legs) has no such dark detail to preserve.
+// Same as WOLF_FUR_PALETTE plus black — for elements that also need to keep matching real dark
+// pixels their natural UV wrap contains: the head's real eye pixels (round three's eye-color fix
+// above), and the snout's real black nose-tip pixel (round six, added when the snout was left
+// unrestricted and picked up `dripstone_block`/`gray_concrete` for its lighter shading pixels —
+// off-theme stone-family blocks, the same class of problem this palette already exists to avoid,
+// per explicit user request to stop dripstone specifically from appearing "in the dog mega size").
 const WOLF_HEAD_PALETTE = [...WOLF_FUR_PALETTE, 'minecraft:black_concrete'];
 
 function wolfModel(textureKey: string): HandAuthoredTemplate {
@@ -966,11 +1042,127 @@ function wolfModel(textureKey: string): HandAuthoredTemplate {
   const restrictions: Record<number, string[]> = {
     0: WOLF_FUR_PALETTE, // upperBody
     1: WOLF_HEAD_PALETTE, // head — keeps black for the eyes
+    4: WOLF_HEAD_PALETTE, // snout — keeps black for the nose tip, excludes dripstone_block/gray_concrete
     5: WOLF_FUR_PALETTE,
     6: WOLF_FUR_PALETTE,
     7: WOLF_FUR_PALETTE,
     8: WOLF_FUR_PALETTE, // 4 legs
     9: WOLF_FUR_PALETTE, // tail — round four: match the body's own restricted fur colors instead of being free to match a different block entirely
+  };
+  return normalizeMobModel(elements, { main: textureKey }, restrictions);
+}
+
+/**
+ * Sixth batch — witch, added per user request. Fetched real geo.json directly from Mojang's
+ * bedrock-samples repo: witch is a *composited* mob — `witch.geo.json` (byte-identical to the
+ * older `witch_v1.0.geo.json`) is a small "attachable" file that only adds a `nose` (overriding the
+ * base villager's own) and a 4-tier stacked `hat` (parented to `head`), layered on top of the plain
+ * `villager.geo.json`'s body/arms/legs/head — the real 1.8-format villager base geometry, fetched
+ * separately and confirmed to have no `bind_pose_rotation`/`rotation` anywhere except the hat's own
+ * small progressive tilts (`hat2`/`hat3`/`hat4`: `[-3,0,1.5]`/`[-6,0,3]`/`[-12,0,6]`) — a handful of
+ * degrees each, not the 90°-around-X case `rotatedBodyElement` handles, and too small to matter at
+ * this engine's voxel resolution, so each hat tier is transcribed as a plain axis-aligned stack
+ * instead (the tilts are what give the real hat its slight forward-leaning curve — ignoring them
+ * just makes it a straight cone, a reasonable approximation for a part this small).
+ *
+ * Real texture verified directly (`witch`, 64×128 — note the *bare* key `witch`, not `witch/witch`
+ * like most other mobs, confirmed by listing `entityTextureFiles`): the body's real UV is genuinely
+ * 2 stacked cubes (`uv:[16,20]` undertunic + `uv:[0,38]` outer robe, `inflate:0.5`), but direct pixel
+ * sampling of both cubes' real from/to bounds found the outer robe cube already fully contains the
+ * undertunic's entire X/Y/Z range — the same "fully-contained duplicate slice" situation wolf's own
+ * separate body bone was in (see wolfModel's round-three doc) — so only the outer robe cube is kept
+ * below; the undertunic is real geometry but never actually visible in the composited result, same
+ * reasoning, not a guess. Real X-width (arms span X -8 to 8, 16 units) already fits this engine's
+ * ceiling exactly, so no `scaleBounds` needed.
+ *
+ * **Round two — real user feedback against a reference screenshot found the first pass wrong on
+ * several fronts, each traced to a real, verifiable texture-reading mistake rather than fixed by
+ * guessing:**
+ *
+ * - **Robe/arm color**: real raw pixels (RGB ~54,23,88) are objectively closer in Lab distance to
+ *   `blue_terracotta` than to any purple block (confirmed: deltaE 14.7 vs 30 for
+ *   `purple_terracotta`) — force-restricted to purple regardless, since that's witch's single most
+ *   iconic real-world trait. Also flattened to one clean sampled patch (`WITCH_ROBE_RECT`, the same
+ *   technique bee's body used) instead of the natural per-voxel wrap, which read as a noisy
+ *   multi-shade patchwork in the reference comparison — real texture folds/shading are subtle
+ *   enough here that a flat color reads cleaner.
+ * - **Green robe stripe**: direct pixel sampling of the robe's real front-face rect found a genuine,
+ *   clean, deliberately-painted 2-column-wide green stripe running almost the robe's full height
+ *   (confirmed: pure green pixels at every row from the robe's near-top down to its bottom, flanked
+ *   by purple on both sides) — a real, distinct feature the first pass's flat single-element body
+ *   had no way to show. Added as its own thin front-face overlay, the same technique the bee's
+ *   black stripes use.
+ * - **Hat gem**: direct pixel sampling of hat tier 2's real front-face rect found a genuine
+ *   symmetric 5×4 diamond of bright green pixels (peak RGB ~37,180,53) — round one's real-jar
+ *   verification *did* see stray green appear for this element, but it was misread as noise and
+ *   restricted away to solid black along with the other 3 (genuinely plain-black) tiers. Tier 2 now
+ *   gets its own restriction (black + green) instead of the shared `WITCH_HAT_PALETTE`, letting the
+ *   real gem pattern survive.
+ * - **Face**: direct pixel sampling of the head's real front-face rect found a genuine dark eyebrow
+ *   band and white eye pixels over warm tan skin (not gray) — round one's `WITCH_HEAD_PALETTE` was
+ *   light-gray/white only, with no dark option, so the eyebrow pixels got forced to the closest
+ *   available light tone and vanished entirely; separately, the skin tone itself was wrong (the
+ *   unrestricted natural match for real skin RGB, `light_gray_wool`, is a worse raw fit — deltaE
+ *   20.5 vs `packed_mud` — than what round one assumed). Replaced with a skin+black+white palette.
+ * - **Crossed arms**: the base villager geo.json's arms hang straight down, but real witches render
+ *   with arms bent and crossed in front (a pose Bedrock applies separately from this base geometry,
+ *   which this engine has no rotation math to reproduce anyway) — per explicit user request, each
+ *   arm is now 2 segments (upper arm near the shoulder, forearm bending inward across the front of
+ *   the chest) instead of 1 straight hanging box, the same segmented-approximation technique the
+ *   bee's angled-up wings use for a similarly un-rotatable real pose.
+ */
+const WITCH_ROBE_PALETTE = ['minecraft:purple_terracotta', 'minecraft:purple_concrete', 'minecraft:purple_wool'];
+const WITCH_LEG_PALETTE = ['minecraft:brown_terracotta', 'minecraft:brown_concrete'];
+// Skin (packed_mud/sandstone — real deltaE confirmed these beat the natural unrestricted match)
+// plus black (eyebrow) and white (eye) so the head's real facial detail survives instead of being
+// forced into a uniform gray, per real user feedback that the face read as a blank block.
+const WITCH_HEAD_PALETTE = ['minecraft:packed_mud', 'minecraft:sandstone', 'minecraft:black_concrete', 'minecraft:white_wool'];
+const WITCH_HAT_PALETTE = ['minecraft:black_concrete', 'minecraft:black_wool', 'minecraft:black_terracotta'];
+// Black plus green, for hat tier 2 specifically — see the real gem finding above.
+const WITCH_HAT_GEM_PALETTE = [...WITCH_HAT_PALETTE, 'minecraft:green_concrete', 'minecraft:lime_concrete'];
+// A confirmed clean, solid purple patch (real column x7, no stripe contamination) used to flatten
+// the robe/arms to one color instead of their natural noisy per-voxel wrap.
+const WITCH_ROBE_RECT: [number, number, number, number] = [7, 50, 8, 51];
+// A confirmed real green pixel from the robe's own stripe column — used for the dedicated stripe
+// overlay below (any valid uv works here since the palette restriction forces green regardless).
+const WITCH_STRIPE_RECT: [number, number, number, number] = [9, 50, 10, 51];
+
+function witchModel(textureKey: string): HandAuthoredTemplate {
+  const elements = [
+    cubeElement({ origin: [-4, 6, -3], size: [8, 18, 6], uv: [0, 38] }, 'main'), // robe (body) — real outer-robe cube only; the real undertunic cube beneath it is fully contained and never visible, same situation wolf's redundant body slice was in
+    stretchedBox([-1, 9, -3], [1, 23, -2], WITCH_STRIPE_RECT, 'main'), // green center stripe — real, flush on the robe's own front face
+    cubeElement({ origin: [-4, 24, -4], size: [8, 10, 8], uv: [0, 0] }, 'main'), // head
+    cubeElement({ origin: [0, 25, -6.75], size: [1, 1, 1], uv: [0, 0] }, 'main'), // nose — left unrestricted: tiny (1 real unit), low visual impact
+    stretchedBox([-4, 16, -2], [4, 20, 2], WITCH_ROBE_RECT, 'main'), // arm shoulder plank — flattened to match the robe
+    // Crossed arms (round two): upper-arm segment near the shoulder, then a forearm segment that
+    // bends inward and forward across the chest instead of hanging straight down — see doc above.
+    stretchedBox([-8, 20, -2], [-4, 24, 2], WITCH_ROBE_RECT, 'main'), // left upper arm
+    stretchedBox([4, 20, -2], [8, 24, 2], WITCH_ROBE_RECT, 'main'), // right upper arm
+    stretchedBox([-6, 16, -4], [1, 20, -2], WITCH_ROBE_RECT, 'main'), // left forearm — bends forward and across toward center
+    stretchedBox([-1, 16, -4], [6, 20, -2], WITCH_ROBE_RECT, 'main'), // right forearm — mirrored, overlapping at center to read as crossed
+    cubeElement({ origin: [-4, 0, -2], size: [4, 12, 4], uv: [0, 22] }, 'main'), // left leg
+    cubeElement({ origin: [0, 0, -2], size: [4, 12, 4], uv: [0, 22] }, 'main'), // right leg
+    // Hat: 4 stacked tiers, real origin/size/uv, small real rotations ignored (see doc above).
+    cubeElement({ origin: [-5, 32.05, -5], size: [10, 2, 10], uv: [0, 64] }, 'main'), // hat brim
+    cubeElement({ origin: [-3.25, 33.5, -3], size: [7, 4, 7], uv: [0, 76] }, 'main'), // hat tier 2 — carries the real green gem
+    cubeElement({ origin: [-1.5, 36.5, -1], size: [4, 4, 4], uv: [0, 87] }, 'main'), // hat tier 3
+    cubeElement({ origin: [0.25, 40, 1], size: [1, 2, 1], uv: [0, 95] }, 'main'), // hat tip
+  ];
+  const restrictions: Record<number, string[]> = {
+    0: WITCH_ROBE_PALETTE, // robe
+    1: ['minecraft:green_concrete', 'minecraft:lime_concrete'], // stripe
+    2: WITCH_HEAD_PALETTE, // head
+    4: WITCH_ROBE_PALETTE, // arm plank
+    5: WITCH_ROBE_PALETTE,
+    6: WITCH_ROBE_PALETTE, // 2 upper arms
+    7: WITCH_ROBE_PALETTE,
+    8: WITCH_ROBE_PALETTE, // 2 forearms
+    9: WITCH_LEG_PALETTE,
+    10: WITCH_LEG_PALETTE, // 2 legs
+    11: WITCH_HAT_PALETTE, // hat brim
+    12: WITCH_HAT_GEM_PALETTE, // hat tier 2 — the real gem
+    13: WITCH_HAT_PALETTE,
+    14: WITCH_HAT_PALETTE, // hat tier 3 + tip
   };
   return normalizeMobModel(elements, { main: textureKey }, restrictions);
 }
@@ -992,4 +1184,5 @@ export const HAND_AUTHORED_MOB_TEMPLATES: Record<string, HandAuthoredTemplate> =
   panda: pandaModel('panda/panda'),
   bee: beeModel('bee/bee'),
   wolf: wolfModel('wolf/wolf'),
+  witch: witchModel('witch'),
 };

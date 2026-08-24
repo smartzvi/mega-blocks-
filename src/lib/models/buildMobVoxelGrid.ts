@@ -52,9 +52,10 @@ export async function buildMobVoxelGrid(
     throw new Error(`Couldn't decode any texture referenced by "${mobName}"'s model.`);
   }
 
-  // No real mob is glass- or diamond-family, but every other matching call site gates the palette
-  // this way — keeping it consistent means a future mob addition can't accidentally end up
-  // glass-eligible or lose its light sources by surprise.
+  // Most mobs are neither glass- nor diamond-family (bee is the one deliberate exception, added to
+  // `isGlassFamilySource` for its glass-winged look), but every matching call site gates the
+  // palette this way regardless — keeping it consistent means a future mob addition can't
+  // accidentally end up glass-eligible or lose its light sources by surprise.
   const effectivePalette = filterLightSourcesForSource(filterPaletteForSource(palette, mobName), mobName);
 
   // Same mechanism buildItemVoxelGrid.ts uses for beacon's crystal — a template can restrict
