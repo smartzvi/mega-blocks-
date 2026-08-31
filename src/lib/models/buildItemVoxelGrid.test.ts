@@ -190,6 +190,83 @@ describe('buildItemVoxelGrid', () => {
     expect(grid.sizeX).toBe(16); // single-block item, not a multi-cell shape
   });
 
+  it('tints a leaves-type texture with the real foliage green before matching, instead of matching its raw grayscale pixels — regression test for leaves rendering as plain gray/stone filler', async () => {
+    const blockStateFiles = fakeFiles({ oak_leaves: { variants: { '': { model: 'minecraft:block/oak_leaves' } } } });
+    const modelFiles = fakeFiles({
+      oak_leaves: {
+        parent: 'minecraft:block/cube_all',
+        textures: { all: 'minecraft:block/oak_leaves' },
+      },
+      cube_all: {
+        textures: { particle: '#all' },
+        elements: [
+          {
+            from: [0, 0, 0],
+            to: [16, 16, 16],
+            faces: {
+              up: { uv: [0, 0, 16, 16], texture: '#all' },
+              down: { uv: [0, 0, 16, 16], texture: '#all' },
+              north: { uv: [0, 0, 16, 16], texture: '#all' },
+              south: { uv: [0, 0, 16, 16], texture: '#all' },
+              east: { uv: [0, 0, 16, 16], texture: '#all' },
+              west: { uv: [0, 0, 16, 16], texture: '#all' },
+            },
+          },
+        ],
+      },
+    });
+    // Real jar's oak_leaves.png is flat grayscale, colored at runtime — simulated here the same way.
+    const rawGrayTexture = solidTexture(150, 150, 150);
+    const decodeTexture = async (key: string) => (key === 'oak_leaves' ? rawGrayTexture : null);
+    const untintedGrayFiller = fakePaletteEntry('minecraft:wrong_gray_stone', 150, 150, 150, 'stone_deepslate');
+    // Real foliage tint (0x77,0xab,0x2f) applied to (150,150,150) rounds to ~(70,101,28).
+    const tintedGreenFiller = fakePaletteEntry('minecraft:green_wool', 70, 101, 28, 'neutrals_concrete');
+    const palette = [untintedGrayFiller, tintedGreenFiller];
+
+    const grid = await buildItemVoxelGrid('oak_leaves', blockStateFiles, modelFiles, decodeTexture, palette, 16);
+    const idsUsed = new Set(grid.voxels.flat(2).filter((v): v is string => v !== null));
+
+    expect(idsUsed.has('minecraft:green_wool')).toBe(true); // matched the tinted color
+    expect(idsUsed.has('minecraft:wrong_gray_stone')).toBe(false); // never the raw untinted color
+  });
+
+  it('restricts a leaves-type item to the green/lime palette family even when a closer raw-color match exists outside it — regression test for real-jar verification finding spruce_leaves matched 253/881 voxels to deepslate_tiles', async () => {
+    const blockStateFiles = fakeFiles({ spruce_leaves: { variants: { '': { model: 'minecraft:block/spruce_leaves' } } } });
+    const modelFiles = fakeFiles({
+      spruce_leaves: { parent: 'minecraft:block/cube_all', textures: { all: 'minecraft:block/spruce_leaves' } },
+      cube_all: {
+        textures: { particle: '#all' },
+        elements: [
+          {
+            from: [0, 0, 0],
+            to: [16, 16, 16],
+            faces: {
+              up: { uv: [0, 0, 16, 16], texture: '#all' },
+              down: { uv: [0, 0, 16, 16], texture: '#all' },
+              north: { uv: [0, 0, 16, 16], texture: '#all' },
+              south: { uv: [0, 0, 16, 16], texture: '#all' },
+              east: { uv: [0, 0, 16, 16], texture: '#all' },
+              west: { uv: [0, 0, 16, 16], texture: '#all' },
+            },
+          },
+        ],
+      },
+    });
+    // Spruce's real fixed tint (0x61,0x99,0x61) applied to a dark base value reads as a near-
+    // neutral dark tone that's genuinely raw-Lab-closer to a gray stone than to any green filler.
+    const darkTexture = solidTexture(80, 80, 80);
+    const decodeTexture = async (key: string) => (key === 'spruce_leaves' ? darkTexture : null);
+    const closerGrayStone = fakePaletteEntry('minecraft:deepslate_tiles', 30, 47, 30, 'stone_deepslate'); // raw-Lab-closest, off-theme
+    const fartherGreen = fakePaletteEntry('minecraft:green_terracotta', 40, 90, 40, 'sand_clay'); // farther, but on-theme
+    const palette = [closerGrayStone, fartherGreen];
+
+    const grid = await buildItemVoxelGrid('spruce_leaves', blockStateFiles, modelFiles, decodeTexture, palette, 16);
+    const idsUsed = new Set(grid.voxels.flat(2).filter((v): v is string => v !== null));
+
+    expect(idsUsed.has('minecraft:green_terracotta')).toBe(true);
+    expect(idsUsed.has('minecraft:deepslate_tiles')).toBe(false); // never the off-theme gray, despite being closer
+  });
+
   it('throws when no referenced texture could be decoded at all', async () => {
     const blockStateFiles = fakeFiles({ x: { variants: { '': { model: 'minecraft:block/x' } } } });
     const modelFiles = fakeFiles({

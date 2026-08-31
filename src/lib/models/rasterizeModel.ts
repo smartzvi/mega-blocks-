@@ -23,11 +23,17 @@ function samplePixel(texture: FaceTexture, u: number, v: number): [number, numbe
   return [texture.data[i], texture.data[i + 1], texture.data[i + 2]];
 }
 
+/** A face was resolvable (had a real definition and a decoded texture) but the exact pixel it
+ *  maps to is genuinely transparent — distinguished from `null` ("couldn't even try": no face
+ *  definition, an unresolvable texture variable, or an undecoded texture) so callers can tell a
+ *  real cutout hole (leaves' gaps, a ladder's rung gaps) apart from "this face has no usable data
+ *  at all, go look elsewhere." See colorVoxel's own doc for why that distinction matters. */
+const TRANSPARENT = 'transparent' as const;
+type FaceSampleResult = [number, number, number] | typeof TRANSPARENT | null;
+
 /** Resolves one face's declared UV rect + texture variable to a sampled RGB color for the given
- *  voxel center, or null if the texture variable can't be resolved, its texture failed to
- *  decode, or the sampled pixel is fully transparent — callers fall back to a different face
- *  rather than treating this as fatal, since an arbitrary block model may reference a texture
- *  this engine couldn't load, or a decorative cutout texture may have a real gap at this spot. */
+ *  voxel center, `TRANSPARENT` if the face is real but the sampled pixel is fully transparent, or
+ *  null if the texture variable can't be resolved or its texture failed to decode. */
 function resolveFaceColor(
   el: BlockModelElement,
   face: FaceName,
@@ -36,7 +42,7 @@ function resolveFaceColor(
   cz: number,
   model: BlockModel,
   textures: Map<string, FaceTexture>
-): [number, number, number] | null {
+): FaceSampleResult {
   const faceDef = el.faces[face];
   if (!faceDef) return null;
 
@@ -65,7 +71,7 @@ function resolveFaceColor(
   const [u1, v1, u2, v2] = faceDef.uv;
   const u = u1 + uT * (u2 - u1);
   const v = v1 + vT * (v2 - v1);
-  return samplePixel(texture, u, v);
+  return samplePixel(texture, u, v) ?? TRANSPARENT;
 }
 
 /**
@@ -156,19 +162,38 @@ export function rasterizeItemModel(
     const cz = (z + 0.5) / scale;
 
     // Most-recently-added element first (the "top" layer), earlier co-located elements as
-    // fallback. Within each element: prefer a genuinely exposed direction with a resolvable
-    // texture; if none work, fall back to any other defined face on that element.
+    // fallback. Within each element: prefer a genuinely exposed direction's own real color.
     for (let i = ownerList.length - 1; i >= 0; i--) {
       const elementIndex = ownerList[i];
       const el: BlockModelElement = model.elements[elementIndex];
-      const candidates = [...exposedFaces, ...(Object.keys(el.faces) as FaceName[])];
-      for (const face of candidates) {
-        const color = resolveFaceColor(el, face, cx, cy, cz, model, textures);
-        if (color) {
-          const [r, g, b] = color;
-          const effectivePalette = elementPaletteOverrides?.get(elementIndex) ?? palette;
-          return matchPixel(rgbToLab(r, g, b), rgbToHsv(r, g, b), face, effectivePalette).id;
+      const effectivePalette = elementPaletteOverrides?.get(elementIndex) ?? palette;
+
+      let sawGenuineTransparency = false;
+      for (const face of exposedFaces) {
+        const result = resolveFaceColor(el, face, cx, cy, cz, model, textures);
+        if (result === TRANSPARENT) {
+          sawGenuineTransparency = true;
+          continue;
         }
+        if (result === null) continue;
+        const [r, g, b] = result;
+        return matchPixel(rgbToLab(r, g, b), rgbToHsv(r, g, b), face, effectivePalette).id;
+      }
+
+      // A genuinely exposed direction sampled real texture data here, and it was truly
+      // transparent — a real cutout hole (leaves' gaps between clusters, a ladder's rung gaps),
+      // not a data problem. Honor it as an actual gap in this element (move on to whatever's
+      // underneath, or nothing) rather than papering over it by borrowing some other face's
+      // unrelated pixel — that "rescue" is only for when this element has NO real transparency
+      // signal at all (every exposed direction was simply unresolvable: no face definition, or an
+      // undecoded texture), which is what the fallback below still covers.
+      if (sawGenuineTransparency) continue;
+
+      for (const face of Object.keys(el.faces) as FaceName[]) {
+        const result = resolveFaceColor(el, face, cx, cy, cz, model, textures);
+        if (result === TRANSPARENT || result === null) continue;
+        const [r, g, b] = result;
+        return matchPixel(rgbToLab(r, g, b), rgbToHsv(r, g, b), face, effectivePalette).id;
       }
     }
     return null;

@@ -102,13 +102,17 @@ function isExactNameExcluded(sourceName: string): boolean {
 }
 
 /**
- * Strips every `lightSource` palette entry (see FullCubeBlockDef's doc — glowstone, sea_lantern,
- * the froglights) for a source confirmed to look bad with them: diamond variants
+ * Strips every `lightSource` palette entry (see FullCubeBlockDef's doc — glowstone and sea_lantern;
+ * the froglights used to be here too but were removed from the palette entirely per explicit user
+ * request, see fullCubeBlocks.ts) for a source confirmed to look bad with them: diamond variants
  * (`isDiamondFamilySource`), wood planks/logs/stems (`isWoodFamilySource`), dirt-block variants
  * (`isDirtFamilySource`), dyed bed variants (`isBedFamilySource`), or an individual exact-name
  * exclusion (`LIGHT_SOURCE_EXCLUDED_EXACT_NAMES`). Unlike `filterPaletteForSource` (glassSource.ts),
  * light sources are eligible by default and only excluded for specific flagged sources, not
- * restricted to an allow-list.
+ * restricted to an allow-list. The per-source comments below still describe real historical
+ * findings (several specifically about froglight) that motivated each exclusion — left as-is since
+ * they remain accurate history and most of these sources also pull glowstone/sea_lantern, which
+ * this function still needs to keep excluding there.
  */
 export function filterLightSourcesForSource(palette: PaletteEntry[], sourceName: string): PaletteEntry[] {
   if (

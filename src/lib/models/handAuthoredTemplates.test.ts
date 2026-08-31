@@ -15,17 +15,80 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
     expect(chest.depthUnits).toBe(16);
   });
 
-  it('chest has exactly 2 elements (base + lid), both within 0-16 bounds and non-overlapping in y', () => {
+  it('chest has exactly 4 elements (base + lid + lock/knob + notch cover), all within 0-16 bounds and the base/lid non-overlapping in y — regression test for real user feedback that the closed chest needs the lock as its own protruding piece, not just a flat painted rectangle', () => {
     const { elements } = HAND_AUTHORED_TEMPLATES.chest.model;
-    expect(elements).toHaveLength(2);
+    expect(elements).toHaveLength(4);
     for (const el of elements) {
       for (const v of [...el.from, ...el.to]) {
         expect(v).toBeGreaterThanOrEqual(0);
         expect(v).toBeLessThanOrEqual(16);
       }
     }
-    const [base, lid] = elements;
+    const [base, lid, knob] = elements;
     expect(base.to[1]).toBeLessThanOrEqual(lid.from[1]); // base sits below the lid
+    // The knob protrudes in front of the base/lid's own front face and straddles their real seam.
+    expect(knob.from[2]).toBeLessThan(base.from[2]);
+    expect(knob.from[1]).toBeLessThan(lid.from[1]);
+    expect(knob.to[1]).toBeGreaterThan(base.to[1]);
+  });
+
+  it('chest\'s lock/knob is restricted to a neutral gray metal palette, but ender_chest\'s knob is restricted to gold instead — regression test for direct pixel sampling finding ender_chest\'s real knob texture (RGB 212,188,75) is a distinct golden-yellow, not the gray metal latch normal/trapped chests have (RGB 156,156,156 for both)', () => {
+    const chest = HAND_AUTHORED_TEMPLATES.chest;
+    const trapped = HAND_AUTHORED_TEMPLATES.trapped_chest;
+    const ender = HAND_AUTHORED_TEMPLATES.ender_chest;
+    expect(chest.elementPaletteRestrictions?.[2]).toEqual(trapped.elementPaletteRestrictions?.[2]);
+    expect(chest.elementPaletteRestrictions?.[2]).toContain('minecraft:light_gray_wool');
+    expect(ender.elementPaletteRestrictions?.[2]).toContain('minecraft:yellow_wool');
+    expect(ender.elementPaletteRestrictions?.[2]).not.toEqual(chest.elementPaletteRestrictions?.[2]);
+  });
+
+  it('chest/trapped_chest\'s base and lid are restricted to a curated wood-tone palette, but ender_chest\'s are left unrestricted — regression test for real-jar verification finding the unrestricted natural wrap matched across 14 different materials (raw logs, stripped logs, assorted planks, red_sandstone), a busy mosaic per explicit user feedback ("the yellow parts... suck"); ender_chest\'s real texture is an unrelated black/purple theme with no wood tone to curate', () => {
+    const chest = HAND_AUTHORED_TEMPLATES.chest;
+    const trapped = HAND_AUTHORED_TEMPLATES.trapped_chest;
+    const ender = HAND_AUTHORED_TEMPLATES.ender_chest;
+    const woodPalette = ['minecraft:gray_terracotta', 'minecraft:yellow_terracotta', 'minecraft:orange_terracotta'];
+    for (const t of [chest, trapped]) {
+      expect(t.elementPaletteRestrictions?.[0]).toEqual(woodPalette); // base
+      expect(t.elementPaletteRestrictions?.[1]).toEqual(woodPalette); // lid
+      expect(t.elementPaletteRestrictions?.[0]).not.toContain('minecraft:oak_log');
+      expect(t.elementPaletteRestrictions?.[0]).not.toContain('minecraft:stripped_dark_oak_log');
+    }
+    expect(ender.elementPaletteRestrictions?.[0]).toBeUndefined();
+    expect(ender.elementPaletteRestrictions?.[1]).toBeUndefined();
+  });
+
+  it('chest/trapped_chest\'s wood-tone palette includes orange_terracotta (round three, restored per explicit user request for "more orange texture") but still excludes brown_concrete — round two found the pairing of the two read as ugly off-hue blotches; brown_concrete was the more off-hue, no-man\'s-land offender of the pair and stays excluded, while orange_terracotta alone gives the real plank grain a second warm tone alongside the yellow family', () => {
+    const { elementPaletteRestrictions } = HAND_AUTHORED_TEMPLATES.chest;
+    expect(elementPaletteRestrictions?.[0]).toContain('minecraft:orange_terracotta');
+    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:brown_concrete');
+  });
+
+  it('chest/trapped_chest\'s wood-tone palette excludes black_terracotta/black_concrete and yellow_wool/yellow_concrete (round five) — regression test for a real-jar ASCII dump finding black_terracotta won a handful of asymmetric corner-column pixels (real texture grain noise) that broke the border\'s vertical stripe continuity on one side only, per explicit user feedback ("the stripes on the frame should be strict... you deleted some of it"); yellow_wool/yellow_concrete never won any real pixel at any resolution but are dropped anyway so the yellow fill is pure yellow_terracotta by construction, per explicit request ("clear yellow terracotta in the yellow part")', () => {
+    const { elementPaletteRestrictions } = HAND_AUTHORED_TEMPLATES.chest;
+    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:black_terracotta');
+    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:black_concrete');
+    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:yellow_wool');
+    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:yellow_concrete');
+  });
+
+  it('chest\'s base bottom face reuses its own top face\'s uv instead of the real texture\'s blank/unpainted rect there — regression test for direct pixel sampling finding the real chest.png\'s "bottom" formula rect is solid RGB(0,0,0) with zero alpha (Mojang never painted a real chest\'s underside since it\'s never visible in-game), which is visible here since this app renders the model freestanding rather than resting on a floor, per explicit user feedback ("you didn\'t fill the bottom... like you did in the top")', () => {
+    const { elements } = HAND_AUTHORED_TEMPLATES.chest.model;
+    const base = elements[0];
+    expect(base.faces.bottom?.uv).toEqual(base.faces.top?.uv);
+  });
+
+  it('chest\'s notch-cover patch sits directly above the knob, flush on the lid\'s own front face, and is restricted to a gray/black-free plank palette — regression test for real user feedback (a circled screenshot) that a real decorative clasp shape painted into the chest texture directly above the lock was showing as a jagged gray notch; the real content wasn\'t a bug, but the user wanted it simplified away into a clean plank continuation', () => {
+    const { model, elementPaletteRestrictions } = HAND_AUTHORED_TEMPLATES.chest;
+    const [, lid, knob, notchCover] = model.elements;
+    expect(notchCover.from[1]).toBeGreaterThanOrEqual(knob.to[1]); // sits above the knob, not overlapping it
+    expect(notchCover.to[1]).toBeLessThanOrEqual(lid.to[1]); // stays within the lid's own height
+    expect(notchCover.from[2]).toBeCloseTo(lid.from[2], 5); // flush on the lid's own front face
+    const palette = elementPaletteRestrictions?.[3];
+    expect(palette).not.toContain('minecraft:gray_terracotta');
+    expect(palette).not.toContain('minecraft:black_terracotta');
+    expect(palette).not.toContain('minecraft:black_concrete');
+    expect(palette).toContain('minecraft:yellow_terracotta');
+    expect(palette).toContain('minecraft:orange_terracotta');
   });
 
   it('every element has all 6 faces defined, each referencing one of its model\'s own texture variables', () => {

@@ -25,7 +25,8 @@ export interface FullCubeBlockDef {
    *  the light-sources section). `filterPaletteForSource` (glassSource.ts) strips every
    *  `glassOnly` entry out of the palette unless the selected source is itself glass-family. */
   glassOnly?: boolean;
-  /** A real light-emitting block (glowstone, sea_lantern, the froglights). Unlike `glassOnly`,
+  /** A real light-emitting block (glowstone, sea_lantern — the froglights were removed outright
+   *  per explicit user request, see the light-sources section below). Unlike `glassOnly`,
    *  this isn't restricted to a specific source family — it's eligible everywhere by default, but
    *  gets excluded for specific sources it looks bad in via `filterLightSourcesForSource`
    *  (lightSourceExclusion.ts), the same way `shroomlight` was removed outright after clashing in
@@ -147,18 +148,26 @@ export const FULL_CUBE_BLOCKS: FullCubeBlockDef[] = [
   // shroomlight pixels into an otherwise-smooth field of orange concrete/wool, and it visibly
   // clashed — sea_lantern's flatter texture doesn't have this problem and stays in.
   // `redstone_lamp` (the "lamp" block) is excluded per user feedback — removed from the palette
-  // entirely, not kept for any face. All remaining entries tagged 'neutrals_concrete' — every
-  // one is a vivid, saturated color, the same "permitted for saturated pixels without a family
-  // penalty" bucket wool/concrete already use. All tagged `lightSource` — see its doc on
-  // FullCubeBlockDef: eligible everywhere by default, but `filterLightSourcesForSource`
-  // (lightSourceExclusion.ts) strips them for specific sources they're confirmed to look bad in
-  // (diamond variants, per real user feedback and a real match-count check: sea_lantern +
-  // verdant_froglight + pearlescent_froglight together ate ~70% of a diamond_block build).
+  // entirely, not kept for any face.
+  //
+  // The three froglights (`ochre_froglight`/`verdant_froglight`/`pearlescent_froglight`) were here
+  // too, but per explicit user request ("remove all of usage of the froglight blocks of all of the
+  // blocks") are removed outright rather than managed via `filterLightSourcesForSource`'s per-source
+  // exclusion list — a real-jar sweep across every mob, hand-authored item, and Block-mode source
+  // (prompted by the user asking which builds used froglight) found it winning real votes in far
+  // more places than the existing exclusion list covered (63 Block-mode sources including
+  // `quartz_block`, `snow`, `bone_block`; the `iron golem`/`snow golem`/`chicken` mobs; `pale_oak_sign`)
+  // — removing the source entirely is simpler and more complete than exclusion-listing every one.
+  // `glowstone`/`sea_lantern` remain — the user's request named froglight specifically, and every
+  // exclusion in `lightSourceExclusion.ts` keyed on either of those two still applies (some sources,
+  // e.g. `piglin_head`/`barrel`, were confirmed to pull glowstone specifically, not froglight).
+  // Both remaining entries tagged 'neutrals_concrete' — vivid, saturated colors, the same
+  // "permitted for saturated pixels without a family penalty" bucket wool/concrete already use.
+  // Tagged `lightSource` — see its doc on FullCubeBlockDef: eligible everywhere by default, but
+  // `filterLightSourcesForSource` (lightSourceExclusion.ts) strips them for specific sources
+  // they're confirmed to look bad in.
   block('glowstone', 'neutrals_concrete', { lightSource: true }),
   block('sea_lantern', 'neutrals_concrete', { lightSource: true }),
-  block('ochre_froglight', 'neutrals_concrete', { lightSource: true }),
-  block('verdant_froglight', 'neutrals_concrete', { lightSource: true }),
-  block('pearlescent_froglight', 'neutrals_concrete', { lightSource: true }),
 
   // Glass — plain, all 16 stained colors, and tinted. Gated `glassOnly`: real glass reads as
   // "correct" filler only inside a build that's itself glass-related (a stained glass block, a

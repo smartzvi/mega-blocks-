@@ -81,15 +81,151 @@ export function stretchedBox(
   return { from, to, faces: { top: faceDef, bottom: faceDef, north: faceDef, south: faceDef, east: faceDef, west: faceDef } };
 }
 
+// Swaps a boxElement result's top/bottom face UVs — needed for the chest lid specifically (see
+// chestModel's own doc): its real texture atlas has top/bottom reversed relative to
+// `boxElement`'s standard box-UV unfold formula, confirmed by direct pixel sampling.
+function swapTopBottom(el: BlockModelElement): BlockModelElement {
+  return { ...el, faces: { ...el.faces, top: el.faces.bottom, bottom: el.faces.top } };
+}
+
+// Replaces a boxElement result's bottom face with its own top face — needed for the chest base
+// specifically (see chestModel's own doc): its real "bottom" formula rect isn't just an unrefined
+// pattern like the lid's was, it's literally blank unpainted canvas (confirmed by direct pixel
+// sampling: solid RGB(0,0,0) with zero alpha across the whole rect), since a real vanilla chest's
+// underside is never visible in-game and Mojang never painted it. Reusing the already-confirmed-
+// good top rect gives the underside a real, on-theme appearance instead of blank/black, which
+// *is* visible here since this app renders the model freestanding rather than resting on a floor.
+function fillBottomWithTop(el: BlockModelElement): BlockModelElement {
+  return { ...el, faces: { ...el.faces, bottom: el.faces.top } };
+}
+
+// Real vanilla single-chest model — confirmed directly against the real 64x64 `chest/normal`
+// texture, not guessed: 3 elements (base, lid, and a separate protruding lock/knob box), not the
+// 2 this app previously had. The knob was missing entirely, per explicit user feedback ("when
+// chest is closed one side needs to be exterior rectangle") — real chests have a small metal latch
+// that sticks out from the closed front, not just a flat painted rectangle on the base/lid's own
+// surface. Real UV origins confirmed by direct pixel sampling: `boxElement`'s south-face formula
+// for the knob (uv[0,0], size 2x4x1) lands on a clean, uniform neutral gray (RGB 156,156,156) —
+// unmistakably the metal latch, not noise — while base (uv[0,19]) and lid (uv[0,0], larger box so
+// it doesn't collide with the knob's own tiny corner of that same origin) land on sensible warm
+// plank-brown tones on every sampled face. The previous version's slightly-off Y proportions (base
+// 0-10/lid 10-15) are corrected to the real 0-9/9-14 split, which is what let the knob's own real Y
+// range (7-11) straddle the lid/base seam correctly.
+//
+// **Lid top/bottom swap**: per direct user feedback with a reference screenshot, the rendered top
+// showed a jarring bright-ring-around-a-dark-center pattern instead of the reference's uniform
+// plank look. Direct pixel sampling found the cause: `boxElement`'s "top" formula rect for the lid
+// (14,0,28,14) is real texture content, but it's a dark, unrefined pattern — while the "bottom"
+// formula rect (28,0,42,14), immediately next to it, is the nice uniform plank tone that actually
+// matches the reference (avg RGB 127,92,37, consistent with the confirmed-good south face). The
+// real chest.png's atlas has the lid's top and bottom swapped relative to `boxElement`'s standard
+// unfold convention — confirmed asymmetric: the base box's own formula-computed "top" is already
+// the nice uniform tone, not swapped. Only the lid needs `swapTopBottom`; its real "bottom" (now
+// showing the dark, unrefined pattern) is fine to leave as-is since a chest's lid underside is
+// never visible in a normal closed render anyway.
+//
+// **Base bottom fill**: per further user feedback ("you didn't fill the bottom... like you did in
+// the top"), the base's real "bottom" formula rect turned out to be blank unpainted canvas (RGB
+// 0,0,0, zero alpha, confirmed directly) rather than just an unrefined pattern — unlike the lid's
+// underside, the base's underside genuinely is visible in this app's freestanding render (there's
+// no floor hiding it), so `fillBottomWithTop` reuses the base's own already-good top rect there
+// instead of leaving it blank/black.
+//
+// **Wood-tone cleanup**: per explicit user feedback that the "yellow parts" looked messy, real-jar
+// verification of base+lid unrestricted showed why — the natural per-voxel wrap's real wood-grain
+// detail was matching across 14 different real blocks, including raw logs and stripped logs
+// (`oak_log`, `jungle_log`, `stripped_oak_log`, `stripped_dark_oak_log`, `stripped_spruce_log`),
+// assorted planks, and `red_sandstone` — a genuinely busy mosaic of visually distinct wood/stone
+// materials, not a clean chest. `CHEST_PALETTE` narrows this to the dark trim tones the border band
+// already correctly used (`gray_terracotta`/`black_terracotta`/`black_concrete`) plus a spread of
+// yellow-family tones for the plank fill — same on-theme-material-family fix this file already uses
+// elsewhere (bed/sheep/etc.), not a full single-color flatten, since the trim-vs-plank contrast
+// itself is real and worth keeping.
+//
+// **Round two**: the first version also allowed `orange_terracotta`/`brown_concrete` for the plank
+// fill (real candidates, per real-jar counts) — but per further user feedback with a close-up
+// screenshot, these read as ugly off-hue blotches rather than natural wood shading, because they
+// sit in an awkward brightness gap between the yellows and the dark trim (confirmed directly: Lab
+// L≈44/29 for orange_terracotta/brown_concrete, versus L≈59 for yellow_terracotta and L≈19 for
+// gray_terracotta) while also being a genuinely different hue (more red/brown) than the yellow
+// planks. Real grain pixels in that middle brightness range were snapping to this off-hue no-man's-
+// land instead of resolving toward either a proper yellow or the dark trim. Replaced with
+// `yellow_concrete`/`yellow_wool` alongside `yellow_terracotta`, widening the yellow side so those
+// same pixels land on an actual yellow shade instead.
+//
+// **Round three**: per further explicit user request ("i want more orange texture... the strips
+// should be [structured] like that photo"), `orange_terracotta` is back — round two's diagnosis
+// (an awkward brightness/hue gap) was about the *combination* with `brown_concrete` specifically;
+// `orange_terracotta` alone, alongside the yellow family, gives the real plank grain pattern a
+// second warm tone to resolve to instead of flattening everything to one yellow shade, matching
+// the reference's visible alternating warm-orange/olive-yellow plank look. `brown_concrete` stays
+// excluded — it was the more off-hue, no-man's-land offender of the original pair.
+//
+// **Round four**: per further explicit user feedback with a circled screenshot, a jagged gray
+// notch was breaking up the orange/yellow banding directly above the knob. Direct pixel sampling
+// confirmed this is real, deliberately-painted texture content (not noise or a mapping bug) — the
+// real chest.png has a small decorative clasp/hinge shape at exactly that spot, right above the
+// lock, which naturally matches to `gray_terracotta` since that's still in the shared restricted
+// palette for the border. Per explicit request to remove it, `CHEST_NOTCH_COVER_RECT`-driven patch
+// element (added last, so it overrides the lid there per this engine's "most recent owner wins"
+// rule) covers exactly that region with a plank-only palette that excludes gray/black entirely, so
+// it resolves to a clean yellow/orange continuation instead.
+//
+// Also per explicit request for "more random and more colors" in the yellow fill specifically (not
+// the orange band): real-jar verification tried several additional candidates
+// (`oak_planks`/`spruce_planks`, `bamboo_planks`, `orange_wool`/`orange_concrete`) and found a
+// genuine tension, not a fixable bug — `oak_planks`/`spruce_planks` are the *unrestricted* nearest
+// match for much of the real mid-tone grain (confirmed directly), so allowing them collapses
+// `orange_terracotta`'s own voxel share from ~1070 to ~150: most of what currently reads as the
+// orange band is really mid-tone pixels defaulting to orange for lack of a closer option once wood
+// planks are excluded, not genuinely orange-hued. Every candidate tried that's actually far enough
+// from orange to leave its share alone (`bamboo_planks`, `orange_wool`, `orange_concrete`, plus
+// `sandstone`/`birch_planks` from an earlier attempt) never won a single real pixel — too far from
+// the real grain's own brightness/hue to ever be the nearest match. Left as `orange_terracotta` +
+// the yellow family for now; genuine yellow-zone variety and a fully-intact strong orange band
+// aren't both achievable with this real texture's actual pixel distribution.
+//
+// **Round five — strict border stripe + pure yellow_terracotta fill**: per further explicit user
+// feedback ("the stripes on the frame should be strict... you deleted some of it" / "i want clear
+// yellow terracotta in the yellow part"), a real-jar ASCII dump of the actual matched output (not
+// assumed) found the concrete cause: `black_terracotta` — still in the palette from round one's
+// original "dark trim tones" set — was winning a handful of real corner-column pixels at two
+// specific texture rows (the real texture's own subtle asymmetric grain noise right at the
+// edge), but only on some columns/rows and not their mirrors, breaking the vertical border stripe's
+// continuity on one side while the other stayed a clean unbroken `gray_terracotta` line — exactly
+// the "strict on one side, missing on the other" look reported. `yellow_wool`/`yellow_concrete`
+// were confirmed (via the same real-jar dump, at both resolution 16 and 32) to win zero voxels
+// anywhere on the block — the yellow fill was already 100% `yellow_terracotta` in practice, just not
+// guaranteed to stay that way. Both dropped: `black_terracotta`/`black_concrete` so every border
+// pixel resolves to the one consistent `gray_terracotta` trim tone (a real, always-available
+// candidate at every one of those noisy pixels, confirmed by re-running the match), and
+// `yellow_wool`/`yellow_concrete` so the yellow fill is pure `yellow_terracotta` by construction, not
+// just by incidental vote count.
+const CHEST_PALETTE = ['minecraft:gray_terracotta', 'minecraft:yellow_terracotta', 'minecraft:orange_terracotta'];
+const CHEST_NOTCH_COVER_PALETTE = ['minecraft:yellow_terracotta', 'minecraft:orange_terracotta'];
+
 function chestModel(textureKey: string): BlockModel {
   return {
     textures: { main: textureKey },
     elements: [
-      boxElement([1, 0, 1], [15, 10, 15], [0, 19], 'main'), // base
-      boxElement([1, 10, 1], [15, 15, 15], [0, 0], 'main'), // lid
+      fillBottomWithTop(boxElement([1, 0, 1], [15, 9, 15], [0, 19], 'main')), // base
+      swapTopBottom(boxElement([1, 9, 1], [15, 14, 15], [0, 0], 'main')), // lid
+      boxElement([7, 7, 0], [9, 11, 1], [0, 0], 'main'), // lock/knob — protrudes 1 unit in front of the closed lid/base seam
+      boxElement([6, 11, 1], [10, 14, 2], [14, 14], 'main'), // notch cover — real decorative clasp shape above the lock, forced to plank tones instead (see doc above)
     ],
   };
 }
+
+// The knob's real texture patch is a clean uniform gray, but it's tiny (2x4 real pixels) — restrict
+// it the same way every other small accent piece in this file is restricted, so a resource pack
+// with slightly different anti-aliasing at that exact corner can't send it to a stray off-theme
+// color instead of reading as metal.
+const CHEST_KNOB_PALETTE = ['minecraft:light_gray_concrete', 'minecraft:light_gray_wool', 'minecraft:light_gray_terracotta', 'minecraft:gray_concrete'];
+// Ender chest's real knob is a distinct golden-yellow (confirmed by direct pixel sampling — RGB
+// 212,188,75 — not the gray metal latch normal/trapped chests have), matching its real texture's
+// gold accent trim elsewhere on the block. `gold_block`/`raw_gold_block` aren't in this palette at
+// all (checked directly), so the closest real candidates are these three.
+const ENDER_CHEST_KNOB_PALETTE = ['minecraft:yellow_wool', 'minecraft:yellow_terracotta', 'minecraft:yellow_concrete'];
 
 function shulkerModel(textureKey: string): BlockModel {
   return {
@@ -535,9 +671,9 @@ function template(model: BlockModel, depthUnits = 16, elementPaletteRestrictions
 export const HAND_AUTHORED_TEMPLATES: Record<string, HandAuthoredTemplate> = {
   // Element 7 is the crystal (see beaconModel: 6 shell panels [0-5] + obsidian frame [6] + crystal [7]).
   beacon: template(beaconModel(), 16, { 7: BEACON_CRYSTAL_PALETTE }),
-  chest: template(chestModel('chest/normal')),
-  trapped_chest: template(chestModel('chest/trapped')),
-  ender_chest: template(chestModel('chest/ender')),
+  chest: template(chestModel('chest/normal'), 16, { 0: CHEST_PALETTE, 1: CHEST_PALETTE, 2: CHEST_KNOB_PALETTE, 3: CHEST_NOTCH_COVER_PALETTE }),
+  trapped_chest: template(chestModel('chest/trapped'), 16, { 0: CHEST_PALETTE, 1: CHEST_PALETTE, 2: CHEST_KNOB_PALETTE, 3: CHEST_NOTCH_COVER_PALETTE }),
+  ender_chest: template(chestModel('chest/ender'), 16, { 2: ENDER_CHEST_KNOB_PALETTE }),
   shulker_box: template(shulkerModel('shulker/shulker')),
   ...Object.fromEntries(
     DYE_COLORS.map((color) => [`${color}_shulker_box`, template(shulkerModel(`shulker/shulker_${color}`))])

@@ -351,6 +351,84 @@ describe('rasterizeItemModel', () => {
     expect(grid.voxels[8][0][31]).toBe('minecraft:foot_color');
   });
 
+  it('honors real per-face transparency as a genuine gap (leaves-style cube_all block), instead of rescuing it via a different face of the identical texture', () => {
+    // A real cube_all leaves model: every one of the 6 faces references the SAME texture at the
+    // SAME [0,0,16,16] rect (confirmed against the real jar). The old fallback logic tried every
+    // other defined face on a transparent hit — for a genuinely different texture per face that
+    // can rescue a real gap in unrelated data, but here every face is the identical source pixels
+    // read through a different axis mapping, so it was defeating the real cutout pattern almost
+    // entirely (confirmed via a real-jar oak_leaves dump: ~99.9% of the outer shell still painted
+    // opaque despite the real texture being 33% transparent).
+    const data = new Uint8ClampedArray(16 * 16 * 4);
+    for (let v = 0; v < 16; v++) {
+      for (let u = 0; u < 16; u++) {
+        const i = (v * 16 + u) * 4;
+        if (u < 8) {
+          data[i] = data[i + 1] = data[i + 2] = 0;
+          data[i + 3] = 0; // real cutout hole
+        } else {
+          data[i] = 90;
+          data[i + 1] = 140;
+          data[i + 2] = 60;
+          data[i + 3] = 255;
+        }
+      }
+    }
+    const texture: FaceTexture = { width: 16, height: 16, data };
+    const uvAll: [number, number, number, number] = [0, 0, 16, 16];
+    const model: BlockModel = {
+      textures: { all: 'all' },
+      elements: [
+        {
+          from: [0, 0, 0],
+          to: [16, 16, 16],
+          faces: {
+            top: { uv: uvAll, texture: '#all' },
+            bottom: { uv: uvAll, texture: '#all' },
+            north: { uv: uvAll, texture: '#all' },
+            south: { uv: uvAll, texture: '#all' },
+            east: { uv: uvAll, texture: '#all' },
+            west: { uv: uvAll, texture: '#all' },
+          },
+        },
+      ],
+    };
+    const palette = [fakePaletteEntry('minecraft:leaf_green', 90, 140, 60)];
+
+    const grid = rasterizeItemModel(model, new Map([['all', texture]]), palette, 16);
+    const flat = grid.voxels.flat(2);
+    const nonNull = flat.filter((v) => v !== null);
+    const shellSize = 16 ** 3 - 14 ** 3; // ordinary hollow-shell voxel count, no transparency at all
+
+    expect(nonNull.length).toBeLessThan(shellSize); // real gaps beyond ordinary interior culling
+    expect(nonNull.every((id) => id === 'minecraft:leaf_green')).toBe(true);
+  });
+
+  it('still falls back to another defined face when the true exposed direction has no real texture data at all (not genuine transparency)', () => {
+    // Regression guard for the fix above: the "borrow another face" rescue must still work for
+    // its original purpose (an element with only a partial set of face definitions) — only a
+    // confirmed real alpha=0 pixel should suppress it, never a missing/undecoded face.
+    const model: BlockModel = {
+      textures: { backup: 'backup' },
+      elements: [
+        {
+          from: [7, 0, 7],
+          to: [9, 2, 9], // thin element with only a top face defined
+          faces: { top: { uv: [0, 0, 16, 16], texture: '#backup' } },
+        },
+      ],
+    };
+    const texture = paintedTexture({ backup: { rect: [0, 0, 16, 16], rgb: [10, 200, 10] } });
+    const palette = [fakePaletteEntry('minecraft:backup_color', 10, 200, 10)];
+
+    const grid = rasterizeItemModel(model, new Map([['backup', texture]]), palette, 16);
+    const flat = grid.voxels.flat(2);
+    const nonNull = flat.filter((v) => v !== null);
+
+    expect(nonNull.length).toBeGreaterThan(0);
+    expect(nonNull.every((id) => id === 'minecraft:backup_color')).toBe(true);
+  });
+
   it('uses elementPaletteOverrides for the owning element index, ignoring the shared palette even when it would be a closer color match', () => {
     // Both elements are painted the exact same color. Without an override, both would match
     // "minecraft:close" (a near-perfect color match). With element 0 overridden to a palette that
