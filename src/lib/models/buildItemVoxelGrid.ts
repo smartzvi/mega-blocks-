@@ -6,6 +6,7 @@ import { HAND_AUTHORED_TEMPLATES } from './handAuthoredTemplates';
 import { filterPaletteForSource } from '../palette/glassSource';
 import { filterLightSourcesForSource } from '../palette/lightSourceExclusion';
 import { filterPaletteForLeafSource } from '../palette/leafSource';
+import { filterPaletteForOreSource } from '../palette/oreSource';
 import { detectTextureTintRgb, tintTexture } from '../palette/tint';
 
 type FileLoaderMap = Map<string, () => Promise<Uint8Array>>;
@@ -51,15 +52,18 @@ export class MultiCellBlockError extends Error {}
  * flat matched-color cube for that block instead.
  *
  * The palette is run through `filterPaletteForSource` (glassSource.ts),
- * `filterLightSourcesForSource` (lightSourceExclusion.ts), and `filterPaletteForLeafSource`
- * (leafSource.ts) before matching, all keyed on `itemName`: real glass blocks only stay eligible
- * when the item being voxelized is itself glass-family (a stained glass block, a beacon, an end
- * crystal, ...), never as generic pale/white filler for an unrelated build; light-source blocks
- * (glowstone, sea_lantern — the froglights were removed from the palette entirely, see
- * fullCubeBlocks.ts) are eligible everywhere except for sources confirmed to look bad with them
- * (diamond variants); a leaves/vine source (except cherry_leaves) is restricted
- * to the green/lime family, so a real dark shadow pixel can't stray into an off-theme gray stone
- * match the way `spruce_leaves` was confirmed to (see leafSource.ts's own doc).
+ * `filterLightSourcesForSource` (lightSourceExclusion.ts), `filterPaletteForLeafSource`
+ * (leafSource.ts), and `filterPaletteForOreSource` (oreSource.ts) before matching, all keyed on
+ * `itemName`: real glass blocks only stay eligible when the item being voxelized is itself
+ * glass-family (a stained glass block, a beacon, an end crystal, ...), never as generic pale/white
+ * filler for an unrelated build; light-source blocks (glowstone, sea_lantern — the froglights were
+ * removed from the palette entirely, see fullCubeBlocks.ts) are eligible everywhere except for
+ * sources confirmed to look bad with them (diamond variants); a leaves/vine source (except
+ * cherry_leaves) is restricted to the green/lime family, so a real dark shadow pixel can't stray
+ * into an off-theme gray stone match the way `spruce_leaves` was confirmed to (see leafSource.ts's
+ * own doc); an ore source (`iron_ore`, `deepslate_copper_ore`, ...) excludes `wood_earth`-family
+ * entries, so a real ore-speckle pixel can't stray into an out-of-place wood-grain/mud match the
+ * way `iron_ore` was confirmed to (see oreSource.ts's own doc).
  *
  * A hand-authored template's `elementPaletteRestrictions` (beacon's crystal) is turned into an
  * `elementPaletteOverrides` map here — each element index restricted to just its listed block ids
@@ -118,8 +122,11 @@ export async function buildItemVoxelGrid(
     throw new Error(`Couldn't decode any texture referenced by "${itemName}"'s model.`);
   }
 
-  const effectivePalette = filterPaletteForLeafSource(
-    filterLightSourcesForSource(filterPaletteForSource(palette, itemName), itemName),
+  const effectivePalette = filterPaletteForOreSource(
+    filterPaletteForLeafSource(
+      filterLightSourcesForSource(filterPaletteForSource(palette, itemName), itemName),
+      itemName
+    ),
     itemName
   );
 

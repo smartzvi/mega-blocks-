@@ -5,6 +5,7 @@ import { applyTint, detectTint } from '../lib/palette/tint';
 import { isFullyOpaque } from '../lib/palette/opacity';
 import { filterPaletteForSource } from '../lib/palette/glassSource';
 import { filterLightSourcesForSource } from '../lib/palette/lightSourceExclusion';
+import { filterPaletteForOreSource } from '../lib/palette/oreSource';
 
 export function BlockSearch() {
   const state = useAppState();
@@ -54,8 +55,8 @@ export function BlockSearch() {
     const tint = detectTint(state.selectedBlockName);
     const sourceTextures = tint ? applyTint(rawTextures, tint) : rawTextures;
 
-    const palette = filterLightSourcesForSource(
-      filterPaletteForSource(state.palette, state.selectedBlockName),
+    const palette = filterPaletteForOreSource(
+      filterLightSourcesForSource(filterPaletteForSource(state.palette, state.selectedBlockName), state.selectedBlockName),
       state.selectedBlockName
     );
     const matchedFaces = matchAllFaces(sourceTextures, palette, state.resolution);

@@ -267,6 +267,43 @@ describe('buildItemVoxelGrid', () => {
     expect(idsUsed.has('minecraft:deepslate_tiles')).toBe(false); // never the off-theme gray, despite being closer
   });
 
+  it('restricts an ore item to non-wood_earth families even when a closer raw-color match exists there — regression test for real-jar verification finding iron_ore matched 234/1536 voxels to jungle_planks/packed_mud', async () => {
+    const blockStateFiles = fakeFiles({ iron_ore: { variants: { '': { model: 'minecraft:block/iron_ore' } } } });
+    const modelFiles = fakeFiles({
+      iron_ore: { parent: 'minecraft:block/cube_all', textures: { all: 'minecraft:block/iron_ore' } },
+      cube_all: {
+        textures: { particle: '#all' },
+        elements: [
+          {
+            from: [0, 0, 0],
+            to: [16, 16, 16],
+            faces: {
+              up: { uv: [0, 0, 16, 16], texture: '#all' },
+              down: { uv: [0, 0, 16, 16], texture: '#all' },
+              north: { uv: [0, 0, 16, 16], texture: '#all' },
+              south: { uv: [0, 0, 16, 16], texture: '#all' },
+              east: { uv: [0, 0, 16, 16], texture: '#all' },
+              west: { uv: [0, 0, 16, 16], texture: '#all' },
+            },
+          },
+        ],
+      },
+    });
+    // A tan ore-speckle tone, genuinely raw-Lab-closer to a wood plank than to any stone/terracotta
+    // filler in this fake palette.
+    const oreSpeckleTexture = solidTexture(190, 170, 140);
+    const decodeTexture = async (key: string) => (key === 'iron_ore' ? oreSpeckleTexture : null);
+    const closerWood = fakePaletteEntry('minecraft:jungle_planks', 195, 172, 138, 'wood_earth'); // raw-Lab-closest, wrong material
+    const fartherStoneToned = fakePaletteEntry('minecraft:white_terracotta', 210, 178, 150, 'sand_clay'); // farther, on-theme
+    const palette = [closerWood, fartherStoneToned];
+
+    const grid = await buildItemVoxelGrid('iron_ore', blockStateFiles, modelFiles, decodeTexture, palette, 16);
+    const idsUsed = new Set(grid.voxels.flat(2).filter((v): v is string => v !== null));
+
+    expect(idsUsed.has('minecraft:white_terracotta')).toBe(true);
+    expect(idsUsed.has('minecraft:jungle_planks')).toBe(false); // never wood, despite being closer
+  });
+
   it('throws when no referenced texture could be decoded at all', async () => {
     const blockStateFiles = fakeFiles({ x: { variants: { '': { model: 'minecraft:block/x' } } } });
     const modelFiles = fakeFiles({
