@@ -14,7 +14,7 @@ export function ModeToggle() {
   if (state.status !== 'ready') return null;
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-start gap-2">
       <div
         role="radiogroup"
         aria-label="Generator mode"

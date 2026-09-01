@@ -51,6 +51,52 @@ export function UploadPanel() {
 
   const isBusy = state.status === 'loading-archive' || state.status === 'building-palette';
 
+  // Once a file has loaded successfully, the big dashed drop-zone below has no more job to do —
+  // it just sits there taking up space forever. Collapse it into a slim status pill instead,
+  // reusing the exact same hidden <input>/inputRef so "Change file" re-triggers the identical
+  // upload flow (ARCHIVE_LOADING resets state but preserves resolution/shape/mode, per the
+  // reducer in AppContext.tsx). Every other status (idle/loading/building/error) keeps the full
+  // box below, unchanged.
+  if (state.status === 'ready' && state.extractedTextures) {
+    return (
+      <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-2.5">
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".jar,.zip"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              setFileName(file.name);
+              void handleFile(file);
+            }
+          }}
+          className="sr-only"
+        />
+        <span className="flex min-w-0 items-center gap-1.5 truncate text-sm">
+          <svg className="h-4 w-4 shrink-0 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span className="truncate text-slate-300">{fileName ?? 'Resource pack'}</span>
+          <span className="hidden shrink-0 text-slate-500 sm:inline">
+            · {state.extractedTextures.size} blocks · {state.palette?.length ?? 0} palette
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="shrink-0 text-xs font-medium text-emerald-400 underline-offset-2 hover:text-emerald-300 hover:underline"
+        >
+          Change file
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`flex w-full flex-col items-center justify-center gap-4 rounded-3xl border border-dashed bg-slate-900/40 p-10 text-center transition-colors sm:p-14 ${
