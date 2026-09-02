@@ -41,7 +41,9 @@ export function ExportButtons() {
         ? state.selectedStructureSource?.name
         : state.mode === 'mobs'
           ? state.selectedMobName
-          : state.selectedBlockName;
+          : state.mode === 'trees'
+            ? state.selectedTreeName
+            : state.selectedBlockName;
 
   // Re-flattening a multi-million-voxel structure grid on every render would be a real cost at
   // that scale (harmless at block/item mode's ≤64³ ceiling, where this was previously unmemoized).
@@ -50,7 +52,15 @@ export function ExportButtons() {
   if (!voxelGrid || !sourceName) return null;
 
   const shapeSuffix =
-    state.mode === 'item' ? 'item' : state.mode === 'structure' ? 'structure' : state.mode === 'mobs' ? 'mob' : state.shape;
+    state.mode === 'item'
+      ? 'item'
+      : state.mode === 'structure'
+        ? 'structure'
+        : state.mode === 'mobs'
+          ? 'mob'
+          : state.mode === 'trees'
+            ? 'tree'
+            : state.shape;
   // Structure names can contain slashes (e.g. "village/plains/houses/plains_small_house_1") from
   // the jar's nested folder layout — not valid in a downloaded filename.
   const safeSourceName = sourceName.replace(/[/\\]/g, '_');
@@ -62,7 +72,9 @@ export function ExportButtons() {
         ? 'structure'
         : state.mode === 'mobs'
           ? 'mob model'
-          : SHAPE_LABEL[state.shape];
+          : state.mode === 'trees'
+            ? 'tree'
+            : SHAPE_LABEL[state.shape];
 
   return (
     <div className="flex flex-col items-center gap-4">

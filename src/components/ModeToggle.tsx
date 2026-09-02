@@ -5,6 +5,7 @@ const OPTIONS: { value: AppMode; label: string }[] = [
   { value: 'item', label: 'Items (beta)' },
   { value: 'structure', label: 'Structures (beta)' },
   { value: 'mobs', label: 'Mobs (beta)' },
+  { value: 'trees', label: 'Trees (beta)' },
 ];
 
 export function ModeToggle() {

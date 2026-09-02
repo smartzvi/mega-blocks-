@@ -2,7 +2,7 @@ import { createContext, useContext, useReducer, type Dispatch, type ReactNode } 
 import type { BlockShape, BlockTextureSet, MatchedFaces, PaletteEntry, VoxelGrid } from '../types/minecraft';
 
 export type Resolution = 16 | 32 | 48 | 64;
-export type AppMode = 'block' | 'item' | 'structure' | 'mobs';
+export type AppMode = 'block' | 'item' | 'structure' | 'mobs' | 'trees';
 export type FileLoaderMap = Map<string, () => Promise<Uint8Array>>;
 
 /** A structure to voxelize, whether picked from the jar's built-in list or a custom upload —
@@ -36,6 +36,8 @@ export interface AppState {
   structureVoxelGrid: VoxelGrid | null;
   selectedMobName: string | null;
   mobVoxelGrid: VoxelGrid | null;
+  selectedTreeName: string | null;
+  treeVoxelGrid: VoxelGrid | null;
 }
 
 const initialState: AppState = {
@@ -59,6 +61,8 @@ const initialState: AppState = {
   structureVoxelGrid: null,
   selectedMobName: null,
   mobVoxelGrid: null,
+  selectedTreeName: null,
+  treeVoxelGrid: null,
 };
 
 export type AppAction =
@@ -85,7 +89,9 @@ export type AppAction =
   | { type: 'STRUCTURE_VOXELIZING' }
   | { type: 'STRUCTURE_VOXELIZED'; voxelGrid: VoxelGrid }
   | { type: 'MOB_VOXELIZING'; mobName: string }
-  | { type: 'MOB_VOXELIZED'; mobVoxelGrid: VoxelGrid };
+  | { type: 'MOB_VOXELIZED'; mobVoxelGrid: VoxelGrid }
+  | { type: 'TREE_VOXELIZING'; treeName: string }
+  | { type: 'TREE_VOXELIZED'; treeVoxelGrid: VoxelGrid };
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -112,7 +118,15 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'FACES_MATCHED':
       return { ...state, matchedFaces: action.matchedFaces };
     case 'RESOLUTION_CHANGED':
-      return { ...state, resolution: action.resolution, matchedFaces: null, itemVoxelGrid: null, structureVoxelGrid: null, mobVoxelGrid: null };
+      return {
+        ...state,
+        resolution: action.resolution,
+        matchedFaces: null,
+        itemVoxelGrid: null,
+        structureVoxelGrid: null,
+        mobVoxelGrid: null,
+        treeVoxelGrid: null,
+      };
     case 'SHAPE_CHANGED':
       // Shape is a post-processing trim applied after matching, not a re-match trigger — no
       // need to clear matchedFaces here.
@@ -133,6 +147,10 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, selectedMobName: action.mobName, mobVoxelGrid: null };
     case 'MOB_VOXELIZED':
       return { ...state, mobVoxelGrid: action.mobVoxelGrid };
+    case 'TREE_VOXELIZING':
+      return { ...state, selectedTreeName: action.treeName, treeVoxelGrid: null };
+    case 'TREE_VOXELIZED':
+      return { ...state, treeVoxelGrid: action.treeVoxelGrid };
     default:
       return state;
   }

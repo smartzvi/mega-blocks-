@@ -9,6 +9,7 @@ import { ShapeSelector } from './components/ShapeSelector';
 import { ItemPicker } from './components/ItemPicker';
 import { StructurePicker } from './components/StructurePicker';
 import { MobPicker } from './components/MobPicker';
+import { TreePicker } from './components/TreePicker';
 import { PreviewScene } from './components/PreviewScene';
 import { MaterialList } from './components/MaterialList';
 import { ExportButtons } from './components/ExportButtons';
@@ -29,6 +30,7 @@ function Workspace() {
       {state.mode === 'item' && <ItemPicker />}
       {state.mode === 'structure' && <StructurePicker />}
       {state.mode === 'mobs' && <MobPicker />}
+      {state.mode === 'trees' && <TreePicker />}
       <PreviewScene />
       <MaterialList />
       <ExportButtons />
