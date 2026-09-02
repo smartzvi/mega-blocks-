@@ -55,9 +55,12 @@ interface TreeSpeciesDef {
 // configured_feature/oak.json and birch.json in the real 1.21.8 jar:
 //   oak:   base_height=4, height_rand_a=2, height_rand_b=0 -> real height range 4-6, picked 5
 //   birch: base_height=5, height_rand_a=2, height_rand_b=0 -> real height range 5-7, picked 6
-// Both share foliage_placer: { type: blob_foliage_placer, height: 3, radius: 2, offset: 0 }.
+// Both real recipes' foliage_placer report height=3 (the parameter this app's own corner-clipped
+// blob shape reads as "how many full-radius layers"), but per direct user feedback on the built
+// result, oak's canopy read as too tall/thick at 3 full-radius layers — dropped to 2 for oak
+// specifically (birch left at the real recipe's own value, not yet reported as an issue).
 const TREE_SPECIES: Record<TreeSpecies, TreeSpeciesDef> = {
-  oak: { logBlock: 'minecraft:oak_log', leavesBlock: 'minecraft:oak_leaves', trunkHeight: 5, foliageHeight: 3, foliageRadius: 2 },
+  oak: { logBlock: 'minecraft:oak_log', leavesBlock: 'minecraft:oak_leaves', trunkHeight: 5, foliageHeight: 2, foliageRadius: 2 },
   birch: { logBlock: 'minecraft:birch_log', leavesBlock: 'minecraft:birch_leaves', trunkHeight: 6, foliageHeight: 3, foliageRadius: 2 },
 };
 

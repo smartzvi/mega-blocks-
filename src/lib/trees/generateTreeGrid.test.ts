@@ -51,6 +51,15 @@ describe('generateTreeGrid', () => {
     }
   });
 
+  it("keeps oak's canopy to 2 full-radius leaf layers (per explicit user feedback that 3 read as too tall/thick), leaving the trunk row just below it bare", () => {
+    const { grid } = generateTreeGrid('oak');
+    const center = 2;
+    // y=2 sits below the canopy now (bottomLeafY=3) — bare trunk, no leaves wrapped around it.
+    expect(grid.voxels[center][2][center]).toBe('minecraft:oak_log[axis=y]');
+    expect(grid.voxels[center + 2][2][center]).toBeNull();
+    expect(grid.voxels[center][2][center + 2]).toBeNull();
+  });
+
   it('tapers to a smaller radius (a plus/cross shape) at the very top leaf layer', () => {
     const { grid } = generateTreeGrid('oak');
     const leafKey = 'minecraft:oak_leaves[distance=7,persistent=false,waterlogged=false]';

@@ -19,6 +19,17 @@ export function isLeafFamilySource(sourceName: string): boolean {
 // sweep) — every leaf type's real color, tinted or baked-in, lands somewhere in this green/lime
 // range (confirmed by direct real-jar sampling: oak/birch/spruce/azalea/cherry's own average
 // tinted RGB all fall in green or pink hue territory, never anything stone/wood/gray-adjacent).
+//
+// Tried adding `moss_block` per explicit user feedback that oak's canopy leaned too heavily on
+// `green_wool` (a real match-count check confirmed it: ~60% of leaf voxels) — reverted after
+// real-jar verification found it never actually wins: oak_leaves' real tinted texture only has 4
+// distinct pixel colors total, and for every one of them (checked directly via matchPixel/raw Lab
+// distance against the entire curated palette, not just this list), `green_wool` or
+// `green_concrete`/`green_terracotta` is genuinely closer than every other real vanilla full-cube
+// block tried (`moss_block`, `slime_block`, `melon_top`/`_side`, `sea_pickle`, `warped_wart_block`,
+// `warped_nylium`, `sculk`, `end_stone` — none beat the existing three). The same "no free lunch"
+// finding as the chest's yellow-variety request: green_wool's dominance here is a real, correct
+// match, not a bug this palette can widen its way out of.
 const LEAF_PALETTE_IDS = new Set([
   'minecraft:green_wool',
   'minecraft:lime_wool',
