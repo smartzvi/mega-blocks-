@@ -14,7 +14,7 @@ export function ResolutionToggle() {
   if (state.status !== 'ready') return null;
 
   return (
-    <div className="flex flex-col items-start gap-2">
+    <div className="flex flex-col items-center gap-2">
       <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Megablock resolution</span>
       <div
         role="radiogroup"

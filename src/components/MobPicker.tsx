@@ -50,7 +50,7 @@ export function MobPicker() {
   }
 
   return (
-    <div className="flex w-full flex-col items-center gap-3">
+    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3">
       <div className="flex flex-wrap justify-center gap-2">
         {MOB_NAMES.map((name) => {
           const active = name === state.selectedMobName;

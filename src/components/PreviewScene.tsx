@@ -35,7 +35,7 @@ export function PreviewScene() {
         <span className="text-xs font-medium uppercase tracking-wider text-slate-500">3D Preview</span>
         <span className="text-xs text-slate-600">drag to rotate · scroll to zoom</span>
       </div>
-      <div className="h-[420px] w-full bg-gradient-to-b from-slate-900 to-slate-950 xl:h-[520px]">
+      <div className="h-[480px] w-full bg-gradient-to-b from-slate-900 to-slate-950">
         <Canvas>
           <PerspectiveCamera makeDefault position={cameraPosition} fov={45} onUpdate={(c) => c.lookAt(0, 0, 0)} />
           <ambientLight intensity={0.6} />

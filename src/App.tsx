@@ -13,14 +13,10 @@ import { PreviewScene } from './components/PreviewScene';
 import { MaterialList } from './components/MaterialList';
 import { ExportButtons } from './components/ExportButtons';
 
-// Left column of the workbench (at xl+; stacks above ResultsPanel below xl): everything the user
-// configures — upload status, mode/resolution/shape, and the active mode's picker. Kept as its
-// own tight `gap-4` flex column, deliberately not inheriting the old page-wide `gap-8` `Workspace`
-// spacing, since these are meant to read as one compact control cluster, not separate sections.
-function ControlsPanel() {
+function Workspace() {
   const state = useAppState();
   return (
-    <div className="flex w-full flex-col items-start gap-4 text-left xl:w-[380px] xl:shrink-0">
+    <>
       <UploadPanel />
       <ResolutionToggle />
       <ModeToggle />
@@ -33,21 +29,10 @@ function ControlsPanel() {
       {state.mode === 'item' && <ItemPicker />}
       {state.mode === 'structure' && <StructurePicker />}
       {state.mode === 'mobs' && <MobPicker />}
-    </div>
-  );
-}
-
-// Right column: the payoff — 3D preview, material breakdown, and export, all visible alongside
-// the controls that produced them instead of requiring a scroll past them (per explicit user
-// feedback that the old single-column flow needed "a lot of scrolling" to get from picking a
-// block to seeing/exporting the result).
-function ResultsPanel() {
-  return (
-    <div className="flex w-full min-w-0 flex-1 flex-col gap-6">
       <PreviewScene />
       <MaterialList />
       <ExportButtons />
-    </div>
+    </>
   );
 }
 
@@ -75,7 +60,7 @@ function AppShell() {
       >
         <AdRail side="left" />
 
-        <main className="mx-auto flex w-full max-w-5xl flex-col items-center gap-8">
+        <main className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center gap-8 text-center">
           <header className="w-full text-center">
             <h1 className="text-balance bg-gradient-to-b from-white to-slate-400 bg-clip-text text-4xl font-extrabold leading-tight tracking-tight text-transparent sm:text-5xl md:text-6xl">
               Minecraft Block <span className="text-emerald-400">→</span> 3D Megablock Generator
@@ -86,14 +71,7 @@ function AppShell() {
             </p>
           </header>
 
-          {/* Two-column workbench at xl+ (controls left, preview/export right) so both are visible
-              at once instead of scrolling from one to the other; a single stacked column (same
-              order as before) below that, since AdRail's own lg: breakpoint would otherwise leave
-              too little room once ads are enabled — see the plan doc for the full width math. */}
-          <div className="flex w-full flex-col gap-8 xl:flex-row xl:items-start xl:gap-6">
-            <ControlsPanel />
-            <ResultsPanel />
-          </div>
+          <Workspace />
 
           <footer className="mt-4 text-center text-xs text-slate-500">
             <a href="/privacy.html" className="hover:text-slate-300">
