@@ -22,15 +22,18 @@ export function isPlanksFamilySource(sourceName: string): boolean {
  * ...) stay fully eligible on the 4 side faces, and confirmed via direct matchAllFaces output,
  * they win the *majority* of oak_planks' own side-face pixels (`stripped_oak_log` alone: 552/1024
  * at resolution 32) since their own average color happens to be closer to some of the plank
- * texture's darker grain-line pixels than any actual plank is. A plain cube spreads this evenly
- * across all 6 faces so it's easy to miss, but a stair's silhouette exposes far more side-wall
- * surface on its tall back half than its low tread — turning an even blend into a visible seam
- * between "clean plank tread" and "blotchy bark-striped back." Confirmed the fix directly: with
- * logs excluded, all 6 faces of oak_planks match identically (812 oak_planks + 212 spruce_planks
- * each), eliminating the split entirely. Real logs have a genuine end-grain surface that makes
- * them a reasonable filler for *other* builds' side faces (that's what `endGrainTopBottom` exists
- * for) — but a plank has no bark or end-grain concept anywhere on it, so this is the one source
- * family that should never reach for a log's own bark texture at all, on any face.
+ * texture's darker grain-line pixels than any actual plank is.
+ *
+ * **Only meant to be applied for non-`full_cube` shapes** — a plain cube spreads this same bark
+ * mixing evenly across all 6 faces, which per direct follow-up user feedback reads as pleasant
+ * wood-grain texture detail, not a mismatch (removing it there made a plain plank cube look
+ * "empty"/flatter than before, a real regression from an earlier version of this fix that applied
+ * it unconditionally). It's specifically the stair/slab/door cutout that creates the visible seam,
+ * by putting a top-face-matched region (the tread) directly next to a side-face-matched region
+ * (the tall back wall) within one shape — nothing else does that. `BlockSearch.tsx` is the only
+ * call site, and applies this conditionally on `state.shape !== 'full_cube'`; it is deliberately
+ * NOT applied in `buildItemVoxelGrid.ts` (Item mode has no shape concept — an item-mode `_planks`
+ * selection is always a plain full cube, so it should always keep the richer, unrestricted look).
  */
 export function filterPaletteForPlanksSource(palette: PaletteEntry[], sourceName: string): PaletteEntry[] {
   if (!isPlanksFamilySource(sourceName)) return palette;

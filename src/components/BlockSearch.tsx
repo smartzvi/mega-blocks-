@@ -46,8 +46,10 @@ export function BlockSearch() {
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, []);
 
-  // Re-runs whenever the selected block OR the output resolution changes, so switching the
-  // resolution toggle re-matches the currently-selected block without needing to re-select it.
+  // Re-runs whenever the selected block, the output resolution, OR the block shape changes —
+  // shape has to be a dependency here (not just applied as a post-hoc trim the way slab/stair/
+  // door cutouts normally are) because a planks source's side-face palette itself depends on it,
+  // see the comment below.
   useEffect(() => {
     if (!state.selectedBlockName || !state.extractedTextures || !state.palette) return;
     const rawTextures = state.extractedTextures.get(state.selectedBlockName);
@@ -56,16 +58,23 @@ export function BlockSearch() {
     const tint = detectTint(state.selectedBlockName);
     const sourceTextures = tint ? applyTint(rawTextures, tint) : rawTextures;
 
-    const palette = filterPaletteForPlanksSource(
-      filterPaletteForOreSource(
-        filterLightSourcesForSource(filterPaletteForSource(state.palette, state.selectedBlockName), state.selectedBlockName),
-        state.selectedBlockName
-      ),
+    let palette = filterPaletteForOreSource(
+      filterLightSourcesForSource(filterPaletteForSource(state.palette, state.selectedBlockName), state.selectedBlockName),
       state.selectedBlockName
     );
+    // filterPaletteForPlanksSource only applies for non-full_cube shapes: a plain full cube shows
+    // real log/bark variety evenly across all 6 faces, which reads as pleasant wood-grain detail,
+    // not a mismatch — per direct user feedback, removing it there made a plain plank cube look
+    // "empty"/flatter than before. The stair/slab/door cutout is what actually creates the
+    // visible seam (a tread's top-face-matched data next to a wall's bark-heavy side-face-matched
+    // data), since it's the only case that puts both right next to each other in one shape — see
+    // woodPlanksSource.ts's own doc.
+    if (state.shape !== 'full_cube') {
+      palette = filterPaletteForPlanksSource(palette, state.selectedBlockName);
+    }
     const matchedFaces = matchAllFaces(sourceTextures, palette, state.resolution);
     dispatch({ type: 'FACES_MATCHED', matchedFaces });
-  }, [state.selectedBlockName, state.resolution, state.extractedTextures, state.palette, dispatch]);
+  }, [state.selectedBlockName, state.resolution, state.shape, state.extractedTextures, state.palette, dispatch]);
 
   function selectBlock(blockName: string) {
     dispatch({ type: 'BLOCK_SELECTED', blockName });
