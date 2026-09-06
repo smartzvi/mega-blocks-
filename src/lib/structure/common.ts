@@ -14,12 +14,21 @@ export interface ParsedStructure {
 /** Real structures sometimes list these explicitly in their block/palette data instead of simply
  *  omitting the position — must be normalized to `null` (air) before culling or palette-building
  *  ever sees them, or culling would treat "air" as a real solid neighbor and palette-building
- *  would try to texture it. */
+ *  would try to texture it. `jigsaw`/`structure_block` aren't air at all — they're real solid
+ *  blocks — but they're structure-*generation* machinery (marking where separate structure pieces
+ *  connect), never part of the finished building; confirmed directly via a real bundled village
+ *  house structure, whose raw NBT genuinely contains a literal `minecraft:jigsaw` block that has
+ *  no business being visible in the finished render (per explicit user feedback: "a weird block at
+ *  the start" — its own real texture is a high-contrast technical arrow/cross icon, not a building
+ *  material, so it stood out sharply once matched/rendered). Treated the same as air here rather
+ *  than only at render time, so culling/palette-building never has to special-case them either. */
 export const AIR_LIKE_BLOCKS = new Set([
   'minecraft:air',
   'minecraft:cave_air',
   'minecraft:void_air',
   'minecraft:structure_void',
+  'minecraft:jigsaw',
+  'minecraft:structure_block',
 ]);
 
 export function normalizeBlockName(name: string): string | null {

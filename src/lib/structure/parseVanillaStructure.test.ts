@@ -44,6 +44,25 @@ describe('parseVanillaStructure', () => {
     expect(blockIds.size).toBe(0);
   });
 
+  it('normalizes jigsaw/structure_block to null — real structure-generation machinery, never part of the finished building, confirmed present in a real bundled village house structure and reported by the user as "a weird block" standing out in the render', () => {
+    const root = nbt.compound({
+      size: nbt.list('int', [nbt.int(1), nbt.int(1), nbt.int(2)]),
+      palette: nbt.list('compound', [
+        nbt.compound({ Name: nbt.string('minecraft:jigsaw') }),
+        nbt.compound({ Name: nbt.string('minecraft:structure_block') }),
+      ]),
+      blocks: nbt.list('compound', [
+        nbt.compound({ state: nbt.int(0), pos: nbt.list('int', [nbt.int(0), nbt.int(0), nbt.int(0)]) }),
+        nbt.compound({ state: nbt.int(1), pos: nbt.list('int', [nbt.int(0), nbt.int(0), nbt.int(1)]) }),
+      ]),
+    });
+
+    const { grid, blockIds } = parseVanillaStructure(root);
+    expect(grid.voxels[0][0][0]).toBeNull();
+    expect(grid.voxels[0][0][1]).toBeNull();
+    expect(blockIds.size).toBe(0);
+  });
+
   it('folds a palette entry\'s Properties into the cell\'s blockstate key, sorted alphabetically', () => {
     const root = nbt.compound({
       size: nbt.list('int', [nbt.int(1), nbt.int(1), nbt.int(1)]),
