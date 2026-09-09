@@ -3,6 +3,7 @@ import { useAppDispatch, useAppState } from '../state/AppContext';
 import { parseStructureFile } from '../lib/structure/parseStructureFile';
 import { cullInteriorVoxels } from '../lib/structure/cullInteriorVoxels';
 import { buildStructureVoxelGrid } from '../lib/structure/buildStructureVoxelGrid';
+import { applyKnownStructureFixes } from '../lib/structure/knownStructureFixes';
 import { loadAndDecodeEntityTexture, loadAndDecodeTexture } from '../lib/zip/decodeTexture';
 
 /** Strips a common structure-file extension (and any directory the browser's file picker might
@@ -71,6 +72,7 @@ export function StructurePicker() {
       try {
         const bytes = await source.load();
         const { grid: rawGrid, blockIds } = await parseStructureFile(bytes);
+        applyKnownStructureFixes(source.name, rawGrid, blockIds);
         const culled = cullInteriorVoxels(rawGrid);
 
         // Most fallback textures live under textures/block/; hand-authored blocks (chest,
