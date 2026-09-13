@@ -3,6 +3,7 @@ import { useAppDispatch, useAppState } from '../state/AppContext';
 import { generateTreeGrid, TREE_SPECIES_NAMES, type TreeSpecies } from '../lib/trees/generateTreeGrid';
 import { cullInteriorVoxels } from '../lib/structure/cullInteriorVoxels';
 import { buildStructureVoxelGrid } from '../lib/structure/buildStructureVoxelGrid';
+import { MAX_TREE_VOXELS } from '../lib/structure/safetyLimits';
 import { loadAndDecodeEntityTexture, loadAndDecodeTexture } from '../lib/zip/decodeTexture';
 
 // Fixed, short list sourced entirely from generateTreeGrid.ts's own registry, not from any
@@ -50,7 +51,8 @@ export function TreePicker() {
           decodeTexture,
           state.blockStateFiles!,
           state.modelFiles!,
-          state.resolution
+          state.resolution,
+          MAX_TREE_VOXELS
         );
 
         if (!cancelled) dispatch({ type: 'TREE_VOXELIZED', treeVoxelGrid: voxelGrid });
