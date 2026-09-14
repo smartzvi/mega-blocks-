@@ -25,11 +25,6 @@ type FileLoaderMap = Map<string, () => Promise<Uint8Array>>;
  * against the other's, doubling the wall thickness at every seam. This final pass merges those
  * into a single true outer skin wherever a voxel turns out to be fully surrounded by real
  * (not just assumed) neighbors, without changing anything visible from outside.
- *
- * `maxVoxels` defaults to `MAX_FINAL_VOXELS` (real/uploaded structures, whose bounding box is
- * arbitrary user input) but Trees mode passes `MAX_TREE_VOXELS` instead — see that constant's own
- * doc in safetyLimits.ts for why a generated tree's small, code-owned bounding box doesn't carry
- * the same risk a real structure's does.
  */
 export async function buildStructureVoxelGrid(
   culled: VoxelGrid,
@@ -38,13 +33,12 @@ export async function buildStructureVoxelGrid(
   decodeTexture: TextureDecoder,
   blockStateFiles: FileLoaderMap,
   modelFiles: FileLoaderMap,
-  resolution: number,
-  maxVoxels: number = MAX_FINAL_VOXELS
+  resolution: number
 ): Promise<VoxelGrid> {
   const sizeX = culled.sizeX * resolution;
   const sizeY = culled.sizeY * resolution;
   const sizeZ = culled.sizeZ * resolution;
-  checkVolume(sizeX * sizeY * sizeZ, maxVoxels, 'This structure at this resolution');
+  checkVolume(sizeX * sizeY * sizeZ, MAX_FINAL_VOXELS, 'This structure at this resolution');
 
   const stamps = new Map<string, VoxelGrid>();
   for (const id of blockIds) {
