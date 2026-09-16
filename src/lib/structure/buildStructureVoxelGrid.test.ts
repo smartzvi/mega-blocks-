@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { averageColorHsv, averageColorLab } from '../color/averageColor';
-import type { FaceTexture, MaterialFamily, PaletteEntry, VoxelGrid } from '../../types/minecraft';
+import type { FaceTexture, MaterialFamily, PaletteEntry } from '../../types/minecraft';
 import { MAX_FINAL_VOXELS } from './safetyLimits';
 import { buildStructureVoxelGrid } from './buildStructureVoxelGrid';
+import { createVoxelGrid, getVoxel, setVoxel } from '../voxel/voxelGrid';
 
 function solidTexture(r: number, g: number, b: number): FaceTexture {
   const data = new Uint8ClampedArray(16 * 16 * 4);
@@ -30,10 +31,6 @@ function fakePaletteEntry(id: string, r: number, g: number, b: number, family: M
   };
 }
 
-function gridOf(sizeX: number, sizeY: number, sizeZ: number, fill: (string | null)[][][]): VoxelGrid {
-  return { sizeX, sizeY, sizeZ, voxels: fill };
-}
-
 const noFiles = new Map<string, () => Promise<Uint8Array>>();
 
 describe('buildStructureVoxelGrid', () => {
@@ -41,11 +38,9 @@ describe('buildStructureVoxelGrid', () => {
     // Two 1x1x1 cells side by side on X, each a hand-authored bed (multi-cell -> flat solid
     // fallback), so the expected output content is trivially predictable without needing a real
     // blockstate/model fixture.
-    const voxels: (string | null)[][][] = [
-      [[  'minecraft:red_bed'  ]],
-      [[  'minecraft:blue_bed' ]],
-    ];
-    const culled = gridOf(2, 1, 1, voxels);
+    const culled = createVoxelGrid(2, 1, 1);
+    setVoxel(culled, 0, 0, 0, 'minecraft:red_bed');
+    setVoxel(culled, 1, 0, 0, 'minecraft:blue_bed');
 
     const redTexture = solidTexture(160, 40, 40);
     const blueTexture = solidTexture(40, 40, 160);
@@ -70,22 +65,28 @@ describe('buildStructureVoxelGrid', () => {
     expect(result.sizeY).toBe(16);
     expect(result.sizeZ).toBe(16);
     // First cell's whole 16^3 stamp is the matched red color, second cell's the matched blue color.
-    expect(result.voxels[0][0][0]).toBe('minecraft:red_color');
-    expect(result.voxels[15][15][15]).toBe('minecraft:red_color');
-    expect(result.voxels[16][0][0]).toBe('minecraft:blue_color');
-    expect(result.voxels[31][15][15]).toBe('minecraft:blue_color');
+    expect(getVoxel(result, 0, 0, 0)).toBe('minecraft:red_color');
+    expect(getVoxel(result, 15, 15, 15)).toBe('minecraft:red_color');
+    expect(getVoxel(result, 16, 0, 0)).toBe('minecraft:blue_color');
+    expect(getVoxel(result, 31, 15, 15)).toBe('minecraft:blue_color');
   });
 
   it('leaves air cells (null) as null in the composed output, never stamping anything there', async () => {
-    const culled = gridOf(2, 1, 1, [[['minecraft:red_bed']], [[null]]]);
+    const culled = createVoxelGrid(2, 1, 1);
+    setVoxel(culled, 0, 0, 0, 'minecraft:red_bed');
     const redTexture = solidTexture(160, 40, 40);
     const decodeTexture = async (key: string) => (key === 'bed/red' ? redTexture : null);
     const palette = [fakePaletteEntry('minecraft:red_color', 160, 40, 40)];
 
     const result = await buildStructureVoxelGrid(culled, new Set(['minecraft:red_bed']), palette, decodeTexture, noFiles, noFiles, 16);
 
-    const secondCellVoxels = result.voxels.slice(16, 32).flat(2);
-    expect(secondCellVoxels.every((v) => v === null)).toBe(true);
+    for (let x = 16; x < 32; x++) {
+      for (let y = 0; y < 16; y++) {
+        for (let z = 0; z < 16; z++) {
+          expect(getVoxel(result, x, y, z)).toBeNull();
+        }
+      }
+    }
   });
 
   it('merges the doubled wall between two adjacent solid stamps into one skin (cullComposedInterior)', async () => {
@@ -93,7 +94,9 @@ describe('buildStructureVoxelGrid', () => {
     // solid 16^3 stamp, so before the final cull pass, the touching x=15/x=16 boundary would both
     // stay solid (each stamp's own wall) — after, that seam should collapse to fully interior,
     // since both sides are true neighbors of a real solid stamp now.
-    const culled = gridOf(2, 1, 1, [[['minecraft:red_bed']], [['minecraft:blue_bed']]]);
+    const culled = createVoxelGrid(2, 1, 1);
+    setVoxel(culled, 0, 0, 0, 'minecraft:red_bed');
+    setVoxel(culled, 1, 0, 0, 'minecraft:blue_bed');
     const decodeTexture = async (key: string) => {
       if (key === 'bed/red') return solidTexture(160, 40, 40);
       if (key === 'bed/blue') return solidTexture(40, 40, 160);
@@ -112,22 +115,34 @@ describe('buildStructureVoxelGrid', () => {
     );
 
     // Deep interior of a single stamp was already null before this pass (hollow shell).
-    expect(result.voxels[5][5][5]).toBeNull();
+    expect(getVoxel(result, 5, 5, 5)).toBeNull();
     // The seam between the two stamps (away from the y/z boundary, so genuinely fully surrounded)
     // is now interior too, not a doubled wall.
-    expect(result.voxels[15][5][5]).toBeNull();
-    expect(result.voxels[16][5][5]).toBeNull();
+    expect(getVoxel(result, 15, 5, 5)).toBeNull();
+    expect(getVoxel(result, 16, 5, 5)).toBeNull();
     // The true outer boundary of the combined shape is untouched.
-    expect(result.voxels[0][5][5]).toBe('minecraft:red_color');
-    expect(result.voxels[31][5][5]).toBe('minecraft:blue_color');
+    expect(getVoxel(result, 0, 5, 5)).toBe('minecraft:red_color');
+    expect(getVoxel(result, 31, 5, 5)).toBe('minecraft:blue_color');
   });
 
-  it('rejects a combination whose full output volume exceeds the safety cap, before doing the expensive per-block work', async () => {
-    // A 100x100x100 source grid at resolution 64 would require 6400^3 output cells — nowhere near
-    // computable, and far past MAX_FINAL_VOXELS — must be rejected immediately.
-    const bigButSparse: VoxelGrid = { sizeX: 100, sizeY: 100, sizeZ: 100, voxels: [] };
-    await expect(buildStructureVoxelGrid(bigButSparse, new Set(), [], async () => null, noFiles, noFiles, 64)).rejects.toThrow(
-      new RegExp(MAX_FINAL_VOXELS.toLocaleString().replace(/,/g, '\\,'))
-    );
+  it('rejects a composition whose real solid-voxel count exceeds the safety cap, before allocating the composed grid', async () => {
+    // An 8x8x8 block of single-cell beds (each cell's stamp is a full resolution^3 solid cube via
+    // the flat-fallback path) at resolution 64 needs 8*8*8*64^3 = 134,217,728 real solid voxels —
+    // far past MAX_FINAL_VOXELS. This is deliberately NOT a sparse/mostly-air grid (the whole point
+    // of the sparse VoxelGrid refactor is that a large-but-mostly-empty bounding box should NOT be
+    // rejected on that basis alone) — it's genuinely solid throughout, so the real content itself,
+    // not the declared size, is what must trip the cap.
+    const culled = createVoxelGrid(8, 8, 8);
+    for (let x = 0; x < 8; x++) {
+      for (let y = 0; y < 8; y++) {
+        for (let z = 0; z < 8; z++) setVoxel(culled, x, y, z, 'minecraft:red_bed');
+      }
+    }
+    const decodeTexture = async (key: string) => (key === 'bed/red' ? solidTexture(160, 40, 40) : null);
+    const palette = [fakePaletteEntry('minecraft:red_color', 160, 40, 40)];
+
+    await expect(
+      buildStructureVoxelGrid(culled, new Set(['minecraft:red_bed']), palette, decodeTexture, noFiles, noFiles, 64)
+    ).rejects.toThrow(new RegExp(MAX_FINAL_VOXELS.toLocaleString().replace(/,/g, '\\,')));
   });
 });

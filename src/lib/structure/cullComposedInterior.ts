@@ -1,4 +1,5 @@
 import type { VoxelGrid } from '../../types/minecraft';
+import { createVoxelGrid, forEachVoxel, getVoxel, setVoxel } from '../voxel/voxelGrid';
 
 /**
  * Final pass over the fully composed, fully voxelized grid: nulls out any solid voxel whose all 6
@@ -18,35 +19,21 @@ import type { VoxelGrid } from '../../types/minecraft';
  * neighbors are known, without changing anything visible from outside.
  */
 export function cullComposedInterior(grid: VoxelGrid): VoxelGrid {
-  const { sizeX, sizeY, sizeZ, voxels } = grid;
+  const { sizeX, sizeY, sizeZ } = grid;
 
-  const isSolidAt = (x: number, y: number, z: number): boolean =>
-    x >= 0 && x < sizeX && y >= 0 && y < sizeY && z >= 0 && z < sizeZ && voxels[x][y][z] !== null;
+  const isSolidAt = (x: number, y: number, z: number): boolean => getVoxel(grid, x, y, z) !== null;
 
-  const culled: (string | null)[][][] = [];
-  for (let x = 0; x < sizeX; x++) {
-    const plane: (string | null)[][] = [];
-    for (let y = 0; y < sizeY; y++) {
-      const column: (string | null)[] = [];
-      for (let z = 0; z < sizeZ; z++) {
-        const id = voxels[x][y][z];
-        if (id === null) {
-          column.push(null);
-          continue;
-        }
-        const fullyBuried =
-          isSolidAt(x + 1, y, z) &&
-          isSolidAt(x - 1, y, z) &&
-          isSolidAt(x, y + 1, z) &&
-          isSolidAt(x, y - 1, z) &&
-          isSolidAt(x, y, z + 1) &&
-          isSolidAt(x, y, z - 1);
-        column.push(fullyBuried ? null : id);
-      }
-      plane.push(column);
-    }
-    culled.push(plane);
-  }
+  const culled = createVoxelGrid(sizeX, sizeY, sizeZ);
+  forEachVoxel(grid, (x, y, z, id) => {
+    const fullyBuried =
+      isSolidAt(x + 1, y, z) &&
+      isSolidAt(x - 1, y, z) &&
+      isSolidAt(x, y + 1, z) &&
+      isSolidAt(x, y - 1, z) &&
+      isSolidAt(x, y, z + 1) &&
+      isSolidAt(x, y, z - 1);
+    if (!fullyBuried) setVoxel(culled, x, y, z, id);
+  });
 
-  return { sizeX, sizeY, sizeZ, voxels: culled };
+  return culled;
 }

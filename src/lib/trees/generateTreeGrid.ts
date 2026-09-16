@@ -1,5 +1,6 @@
 import type { VoxelGrid } from '../../types/minecraft';
 import { encodeBlockstateKey } from '../structure/blockstateKey';
+import { createVoxelGrid, setVoxel } from '../voxel/voxelGrid';
 
 /**
  * Trees mode generates a small synthetic "structure" entirely in code — a Minecraft tree isn't a
@@ -91,12 +92,10 @@ export function generateTreeGrid(species: TreeSpecies): { grid: VoxelGrid; block
   const sizeY = def.trunkHeight + 1; // trunk (y=0..trunkTop) plus one leaf layer above it
   const center = R; // both X and Z center on the trunk column
 
-  const voxels: (string | null)[][][] = Array.from({ length: sizeX }, () =>
-    Array.from({ length: sizeY }, () => new Array<string | null>(sizeZ).fill(null))
-  );
+  const grid = createVoxelGrid(sizeX, sizeY, sizeZ);
 
   for (let y = 0; y <= trunkTop; y++) {
-    voxels[center][y][center] = logKey;
+    setVoxel(grid, center, y, center, logKey);
   }
 
   const bottomLeafY = trunkTop - def.foliageHeight + 1;
@@ -107,10 +106,10 @@ export function generateTreeGrid(species: TreeSpecies): { grid: VoxelGrid; block
       for (let dz = -radius; dz <= radius; dz++) {
         if (Math.abs(dx) === radius && Math.abs(dz) === radius) continue; // clip the 4 extreme corners
         if (dx === 0 && dz === 0 && y <= trunkTop) continue; // trunk already occupies this cell
-        voxels[center + dx][y][center + dz] = leafKey;
+        setVoxel(grid, center + dx, y, center + dz, leafKey);
       }
     }
   }
 
-  return { grid: { sizeX, sizeY, sizeZ, voxels }, blockIds: new Set([logKey, leafKey]) };
+  return { grid, blockIds: new Set([logKey, leafKey]) };
 }

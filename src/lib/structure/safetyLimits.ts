@@ -8,11 +8,11 @@
  *    caps structures at 48x48x48 (110,592 cells) — this cap is set well above that, since it
  *    mainly needs to guard custom-uploaded .litematic files, which aren't bound by that limit.
  *
- * 2. MAX_FINAL_VOXELS — checked after the cheap source-grid cull pass, before allocating the
- *    upscaled grid. Deliberately independent of the renderer: parsing/culling/upscaling into JS
- *    arrays costs real memory/CPU regardless of how the result is drawn, and culling reduces
- *    render/instance cost but does NOT reduce the base VoxelGrid's dense-array footprint (culled
- *    cells become `null` entries, not fewer array cells).
+ * 2. MAX_FINAL_VOXELS — checked in buildStructureVoxelGrid.ts against the real solid-voxel count
+ *    the composed grid is about to hold (VoxelGrid's `voxels` is a sparse map — see its own doc —
+ *    so this is genuine memory/CPU cost, not a bounding-box estimate). This is deliberately NOT a
+ *    bounding-box check: a shape that's mostly air relative to its bounding box (a tree's rounded
+ *    canopy, a thin fence line) shouldn't be capped for empty space it no longer pays to store.
  */
 export const MAX_SOURCE_VOLUME = 1_000_000;
 export const MAX_FINAL_VOXELS = 4_000_000;

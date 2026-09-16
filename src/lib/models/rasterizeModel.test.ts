@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { rasterizeItemModel } from './rasterizeModel';
 import { averageColorHsv, averageColorLab } from '../color/averageColor';
-import type { FaceTexture, MaterialFamily, PaletteEntry } from '../../types/minecraft';
+import type { FaceTexture, MaterialFamily, PaletteEntry, VoxelGrid } from '../../types/minecraft';
 import type { BlockModel } from '../../types/item';
+import { getVoxel } from '../voxel/voxelGrid';
 
 function fakePaletteEntry(id: string, r: number, g: number, b: number, family: MaterialFamily = 'stone_deepslate'): PaletteEntry {
   const data = new Uint8ClampedArray(16 * 16 * 4);
@@ -48,6 +49,10 @@ function paintedTexture(regions: Record<string, { rect: [number, number, number,
   return { width: 16, height: 16, data };
 }
 
+function nonNullValues(grid: VoxelGrid): string[] {
+  return [...grid.voxels.values()];
+}
+
 describe('rasterizeItemModel', () => {
   it('hollows out the interior of a full-cube element, like the existing cube shell', () => {
     const model: BlockModel = {
@@ -71,8 +76,7 @@ describe('rasterizeItemModel', () => {
     const palette = [fakePaletteEntry('minecraft:red_filler', 200, 30, 30)];
 
     const grid = rasterizeItemModel(model, new Map([['all', texture]]), palette, 4);
-    const flat = grid.voxels.flat(2);
-    const nonNull = flat.filter((v) => v !== null);
+    const nonNull = nonNullValues(grid);
 
     expect(grid.sizeX).toBe(4);
     expect(grid.sizeY).toBe(4);
@@ -105,12 +109,12 @@ describe('rasterizeItemModel', () => {
 
     const grid = rasterizeItemModel(model, new Map([['x', texture]]), palette, 4);
 
-    expect(grid.voxels[1][3][1]).toBe('minecraft:top_color'); // y=3 boundary, x/z interior
-    expect(grid.voxels[1][0][1]).toBe('minecraft:bottom_color'); // y=0 boundary
-    expect(grid.voxels[1][1][0]).toBe('minecraft:north_color'); // z=0 boundary
-    expect(grid.voxels[1][1][3]).toBe('minecraft:south_color'); // z=3 boundary
-    expect(grid.voxels[0][1][1]).toBe('minecraft:west_color'); // x=0 boundary
-    expect(grid.voxels[3][1][1]).toBe('minecraft:east_color'); // x=3 boundary
+    expect(getVoxel(grid, 1, 3, 1)).toBe('minecraft:top_color'); // y=3 boundary, x/z interior
+    expect(getVoxel(grid, 1, 0, 1)).toBe('minecraft:bottom_color'); // y=0 boundary
+    expect(getVoxel(grid, 1, 1, 0)).toBe('minecraft:north_color'); // z=0 boundary
+    expect(getVoxel(grid, 1, 1, 3)).toBe('minecraft:south_color'); // z=3 boundary
+    expect(getVoxel(grid, 0, 1, 1)).toBe('minecraft:west_color'); // x=0 boundary
+    expect(getVoxel(grid, 3, 1, 1)).toBe('minecraft:east_color'); // x=3 boundary
   });
 
   it('keeps a thin torch-like element fully solid (no hollowed-out interior) since every voxel touches open space', () => {
@@ -130,8 +134,7 @@ describe('rasterizeItemModel', () => {
     const palette = [fakePaletteEntry('minecraft:torch_color', 180, 140, 40)];
 
     const grid = rasterizeItemModel(model, new Map([['torch', texture]]), palette, 16);
-    const flat = grid.voxels.flat(2);
-    const nonNull = flat.filter((v) => v !== null);
+    const nonNull = nonNullValues(grid);
 
     expect(nonNull).toHaveLength(2 * 10 * 2); // full 2x10x2 volume, nothing hollowed out
     expect(nonNull.every((id) => id === 'minecraft:torch_color')).toBe(true);
@@ -152,8 +155,7 @@ describe('rasterizeItemModel', () => {
     const palette = [fakePaletteEntry('minecraft:ladder_color', 90, 60, 30)];
 
     const grid = rasterizeItemModel(model, new Map([['t', texture]]), palette, 16);
-    const flat = grid.voxels.flat(2);
-    const nonNull = flat.filter((v) => v !== null);
+    const nonNull = nonNullValues(grid);
 
     expect(nonNull.length).toBeGreaterThan(0); // must not vanish entirely
     expect(nonNull.every((id) => id === 'minecraft:ladder_color')).toBe(true);
@@ -193,13 +195,12 @@ describe('rasterizeItemModel', () => {
     const palette = [fakePaletteEntry('minecraft:black_concrete', 20, 20, 20), fakePaletteEntry('minecraft:orange_wool', 200, 150, 50)];
 
     const grid = rasterizeItemModel(model, new Map([['t', texture]]), palette, 16);
-    const layer = grid.voxels.map((plane) => plane[15]); // y = 15 layer, indexed [x][z]
 
     for (let x = 0; x < 8; x++) {
-      for (let z = 0; z < 16; z++) expect(layer[x][z]).toBeNull();
+      for (let z = 0; z < 16; z++) expect(getVoxel(grid, x, 15, z)).toBeNull();
     }
     for (let x = 8; x < 16; x++) {
-      for (let z = 0; z < 16; z++) expect(layer[x][z]).toBe('minecraft:orange_wool');
+      for (let z = 0; z < 16; z++) expect(getVoxel(grid, x, 15, z)).toBe('minecraft:orange_wool');
     }
   });
 
@@ -240,7 +241,7 @@ describe('rasterizeItemModel', () => {
     ]);
 
     const grid = rasterizeItemModel(model, textures, palette, 16);
-    const nonNull = grid.voxels.flat(2).filter((v) => v !== null);
+    const nonNull = nonNullValues(grid);
 
     expect(nonNull.length).toBeGreaterThan(0); // must not vanish entirely
     expect(nonNull.every((id) => id === 'minecraft:red_wire_color')).toBe(true);
@@ -265,8 +266,7 @@ describe('rasterizeItemModel', () => {
 
     // Only "backup" is decoded — "missing" has no entry, simulating a failed/unresolved texture.
     const grid = rasterizeItemModel(model, new Map([['backup', texture]]), palette, 4);
-    const flat = grid.voxels.flat(2);
-    const nonNull = flat.filter((v) => v !== null);
+    const nonNull = nonNullValues(grid);
 
     expect(nonNull.length).toBeGreaterThan(0);
     expect(nonNull.every((id) => id === 'minecraft:backup_color')).toBe(true);
@@ -309,8 +309,8 @@ describe('rasterizeItemModel', () => {
     // Bottom of the lower half (y=0) reads as the lower color; top of the upper half (y=31)
     // reads as the upper color — confirms both halves landed at the right Y range, not just
     // that colors exist somewhere.
-    expect(grid.voxels[8][0][8]).toBe('minecraft:lower_color');
-    expect(grid.voxels[8][31][8]).toBe('minecraft:upper_color');
+    expect(getVoxel(grid, 8, 0, 8)).toBe('minecraft:lower_color');
+    expect(getVoxel(grid, 8, 31, 8)).toBe('minecraft:upper_color');
   });
 
   it('supports modelDepthUnits for a genuinely 2-block-long structure (e.g. a hand-authored bed), independent of Y', () => {
@@ -347,8 +347,8 @@ describe('rasterizeItemModel', () => {
     expect(grid.sizeZ).toBe(32); // genuinely 2 blocks long, not squashed into one
     // Head end (z=0) reads as the head color; foot end (z=31) reads as the foot color — confirms
     // both halves landed at the right Z range, independent of the Y axis door uses.
-    expect(grid.voxels[8][0][0]).toBe('minecraft:head_color');
-    expect(grid.voxels[8][0][31]).toBe('minecraft:foot_color');
+    expect(getVoxel(grid, 8, 0, 0)).toBe('minecraft:head_color');
+    expect(getVoxel(grid, 8, 0, 31)).toBe('minecraft:foot_color');
   });
 
   it('honors real per-face transparency as a genuine gap (leaves-style cube_all block), instead of rescuing it via a different face of the identical texture', () => {
@@ -396,8 +396,7 @@ describe('rasterizeItemModel', () => {
     const palette = [fakePaletteEntry('minecraft:leaf_green', 90, 140, 60)];
 
     const grid = rasterizeItemModel(model, new Map([['all', texture]]), palette, 16);
-    const flat = grid.voxels.flat(2);
-    const nonNull = flat.filter((v) => v !== null);
+    const nonNull = nonNullValues(grid);
     const shellSize = 16 ** 3 - 14 ** 3; // ordinary hollow-shell voxel count, no transparency at all
 
     expect(nonNull.length).toBeLessThan(shellSize); // real gaps beyond ordinary interior culling
@@ -422,8 +421,7 @@ describe('rasterizeItemModel', () => {
     const palette = [fakePaletteEntry('minecraft:backup_color', 10, 200, 10)];
 
     const grid = rasterizeItemModel(model, new Map([['backup', texture]]), palette, 16);
-    const flat = grid.voxels.flat(2);
-    const nonNull = flat.filter((v) => v !== null);
+    const nonNull = nonNullValues(grid);
 
     expect(nonNull.length).toBeGreaterThan(0);
     expect(nonNull.every((id) => id === 'minecraft:backup_color')).toBe(true);
@@ -460,7 +458,7 @@ describe('rasterizeItemModel', () => {
 
     const grid = rasterizeItemModel(model, textures, palette, 16, 32, 16, new Map([[0, [restricted]]]));
 
-    expect(grid.voxels[8][0][8]).toBe('minecraft:restricted'); // element 0 (lower), overridden
-    expect(grid.voxels[8][31][8]).toBe('minecraft:close'); // element 1 (upper), shared palette, unaffected
+    expect(getVoxel(grid, 8, 0, 8)).toBe('minecraft:restricted'); // element 0 (lower), overridden
+    expect(getVoxel(grid, 8, 31, 8)).toBe('minecraft:close'); // element 1 (upper), shared palette, unaffected
   });
 });

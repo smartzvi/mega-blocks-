@@ -12,6 +12,7 @@ import {
   type ParsedStructure,
 } from './common';
 import { MAX_SOURCE_VOLUME, checkVolume } from './safetyLimits';
+import { forEachVoxel, setVoxel } from '../voxel/voxelGrid';
 
 interface RegionBox {
   minX: number;
@@ -117,7 +118,7 @@ export function parseLitematic(root: NbtTag): ParsedStructure {
           const gx = region.box.minX + x - minX;
           const gy = region.box.minY + y - minY;
           const gz = region.box.minZ + z - minZ;
-          grid.voxels[gx][gy][gz] = key; // last region wins on overlap, including overwriting with air
+          setVoxel(grid, gx, gy, gz, key); // last region wins on overlap, including overwriting with air
         }
       }
     }
@@ -127,14 +128,7 @@ export function parseLitematic(root: NbtTag): ParsedStructure {
   // added by an earlier region can be fully overwritten by a later overlapping region, and
   // blockIds should only ever reflect what's actually present in the final result.
   const blockIds = new Set<string>();
-  for (let x = 0; x < sizeX; x++) {
-    for (let y = 0; y < sizeY; y++) {
-      for (let z = 0; z < sizeZ; z++) {
-        const id = grid.voxels[x][y][z];
-        if (id) blockIds.add(id);
-      }
-    }
-  }
+  forEachVoxel(grid, (_x, _y, _z, id) => blockIds.add(id));
 
   return { grid, blockIds };
 }

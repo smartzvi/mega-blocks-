@@ -1,5 +1,6 @@
 import type { VoxelGrid } from '../../types/minecraft';
 import { encodeBlockstateKey } from './blockstateKey';
+import { setVoxel } from '../voxel/voxelGrid';
 
 interface StructureFix {
   /** Source-grid position, in the structure's own (unscaled) coordinates. */
@@ -60,7 +61,7 @@ export function applyKnownStructureFixes(structureName: string, grid: VoxelGrid,
     const [x, y, z] = fix.pos;
     if (x < 0 || x >= grid.sizeX || y < 0 || y >= grid.sizeY || z < 0 || z >= grid.sizeZ) continue;
     const key = encodeBlockstateKey(fix.name, fix.properties);
-    grid.voxels[x][y][z] = key;
+    setVoxel(grid, x, y, z, key);
     blockIds.add(key);
   }
 

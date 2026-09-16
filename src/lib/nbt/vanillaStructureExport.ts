@@ -3,6 +3,7 @@ import type { VoxelGrid } from '../../types/minecraft';
 import { writeNbt } from './nbtWriter';
 import { gzipBytes } from './gzip';
 import { DATA_VERSION } from '../blockstate/dataVersion';
+import { forEachVoxel } from '../voxel/voxelGrid';
 
 /** Builds the vanilla structure-block NBT tag tree (the /structure load format) from a voxel grid. */
 export function buildVanillaStructureNbt(grid: VoxelGrid): NbtTag {
@@ -10,28 +11,21 @@ export function buildVanillaStructureNbt(grid: VoxelGrid): NbtTag {
   const paletteIndex = new Map<string, number>();
   const blockTags: NbtTag[] = [];
 
-  for (let x = 0; x < grid.sizeX; x++) {
-    for (let y = 0; y < grid.sizeY; y++) {
-      for (let z = 0; z < grid.sizeZ; z++) {
-        const blockId = grid.voxels[x][y][z];
-        if (!blockId) continue;
-
-        let index = paletteIndex.get(blockId);
-        if (index === undefined) {
-          index = paletteIds.length;
-          paletteIds.push(blockId);
-          paletteIndex.set(blockId, index);
-        }
-
-        blockTags.push(
-          nbt.compound({
-            state: nbt.int(index),
-            pos: nbt.list('int', [nbt.int(x), nbt.int(y), nbt.int(z)]),
-          })
-        );
-      }
+  forEachVoxel(grid, (x, y, z, blockId) => {
+    let index = paletteIndex.get(blockId);
+    if (index === undefined) {
+      index = paletteIds.length;
+      paletteIds.push(blockId);
+      paletteIndex.set(blockId, index);
     }
-  }
+
+    blockTags.push(
+      nbt.compound({
+        state: nbt.int(index),
+        pos: nbt.list('int', [nbt.int(x), nbt.int(y), nbt.int(z)]),
+      })
+    );
+  });
 
   const paletteTags = paletteIds.map((id) => nbt.compound({ Name: nbt.string(id) }));
 

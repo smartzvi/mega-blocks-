@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildItemVoxelGrid } from './buildItemVoxelGrid';
 import { averageColorHsv, averageColorLab } from '../color/averageColor';
 import type { FaceTexture, MaterialFamily, PaletteEntry } from '../../types/minecraft';
+import { getVoxel } from '../voxel/voxelGrid';
 
 function fakeFiles(files: Record<string, unknown>) {
   const map = new Map<string, () => Promise<Uint8Array>>();
@@ -72,7 +73,7 @@ describe('buildItemVoxelGrid', () => {
 
     const grid = await buildItemVoxelGrid('oak_fence', blockStateFiles, modelFiles, decodeTexture, palette, 16);
 
-    const nonNull = grid.voxels.flat(2).filter((v) => v !== null);
+    const nonNull = [...grid.voxels.values()];
     expect(grid.sizeX).toBe(16);
     expect(nonNull.length).toBeGreaterThan(0);
     expect(nonNull.every((id) => id === 'minecraft:oak_planks_filler')).toBe(true);
@@ -89,7 +90,7 @@ describe('buildItemVoxelGrid', () => {
     const palette = [fakePaletteEntry('minecraft:chest_filler', 120, 90, 50)];
 
     const grid = await buildItemVoxelGrid('chest', emptyFiles, emptyFiles, decodeTexture, palette, 16);
-    const nonNull = grid.voxels.flat(2).filter((v) => v !== null);
+    const nonNull = [...grid.voxels.values()];
 
     expect(nonNull.length).toBeGreaterThan(0);
     expect(nonNull.every((id) => id === 'minecraft:chest_filler')).toBe(true);
@@ -102,7 +103,7 @@ describe('buildItemVoxelGrid', () => {
     const palette = [fakePaletteEntry('minecraft:bed_filler', 160, 40, 40)];
 
     const grid = await buildItemVoxelGrid('red_bed', emptyFiles, emptyFiles, decodeTexture, palette, 16);
-    const nonNull = grid.voxels.flat(2).filter((v) => v !== null);
+    const nonNull = [...grid.voxels.values()];
 
     expect(grid.sizeX).toBe(16);
     expect(grid.sizeY).toBe(16);
@@ -154,8 +155,8 @@ describe('buildItemVoxelGrid', () => {
     expect(grid.sizeX).toBe(16);
     expect(grid.sizeY).toBe(32); // genuinely 2 blocks tall, not a single squashed block
     expect(grid.sizeZ).toBe(16);
-    expect(grid.voxels[8][0][8]).toBe('minecraft:door_bottom_color'); // bottom of the lower half
-    expect(grid.voxels[8][31][8]).toBe('minecraft:door_top_color'); // top of the upper half
+    expect(getVoxel(grid, 8, 0, 8)).toBe('minecraft:door_bottom_color'); // bottom of the lower half
+    expect(getVoxel(grid, 8, 31, 8)).toBe('minecraft:door_top_color'); // top of the upper half
   });
 
   it('routes beacon to the hand-authored hollow-shell template, restricting its crystal to the curated white-to-light-blue set', async () => {
@@ -182,7 +183,7 @@ describe('buildItemVoxelGrid', () => {
     const palette = [glass, obsidianFiller, closeButNotListed, curatedPick];
 
     const grid = await buildItemVoxelGrid('beacon', emptyFiles, emptyFiles, decodeTexture, palette, 16);
-    const idsUsed = new Set(grid.voxels.flat(2).filter((v): v is string => v !== null));
+    const idsUsed = new Set(grid.voxels.values());
 
     expect(idsUsed.has('minecraft:sea_lantern')).toBe(true); // crystal used the curated allow-listed id
     expect(idsUsed.has('minecraft:close_but_not_listed')).toBe(false); // never an unlisted id, even if closer/lightSource
@@ -224,7 +225,7 @@ describe('buildItemVoxelGrid', () => {
     const palette = [untintedGrayFiller, tintedGreenFiller];
 
     const grid = await buildItemVoxelGrid('oak_leaves', blockStateFiles, modelFiles, decodeTexture, palette, 16);
-    const idsUsed = new Set(grid.voxels.flat(2).filter((v): v is string => v !== null));
+    const idsUsed = new Set(grid.voxels.values());
 
     expect(idsUsed.has('minecraft:green_wool')).toBe(true); // matched the tinted color
     expect(idsUsed.has('minecraft:wrong_gray_stone')).toBe(false); // never the raw untinted color
@@ -261,7 +262,7 @@ describe('buildItemVoxelGrid', () => {
     const palette = [closerGrayStone, fartherGreen];
 
     const grid = await buildItemVoxelGrid('spruce_leaves', blockStateFiles, modelFiles, decodeTexture, palette, 16);
-    const idsUsed = new Set(grid.voxels.flat(2).filter((v): v is string => v !== null));
+    const idsUsed = new Set(grid.voxels.values());
 
     expect(idsUsed.has('minecraft:green_terracotta')).toBe(true);
     expect(idsUsed.has('minecraft:deepslate_tiles')).toBe(false); // never the off-theme gray, despite being closer
@@ -298,7 +299,7 @@ describe('buildItemVoxelGrid', () => {
     const palette = [closerWood, fartherStoneToned];
 
     const grid = await buildItemVoxelGrid('iron_ore', blockStateFiles, modelFiles, decodeTexture, palette, 16);
-    const idsUsed = new Set(grid.voxels.flat(2).filter((v): v is string => v !== null));
+    const idsUsed = new Set(grid.voxels.values());
 
     expect(idsUsed.has('minecraft:white_terracotta')).toBe(true);
     expect(idsUsed.has('minecraft:jungle_planks')).toBe(false); // never wood, despite being closer

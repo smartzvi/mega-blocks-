@@ -1,5 +1,6 @@
 import type { NbtTag } from '../../types/nbt';
 import type { VoxelGrid } from '../../types/minecraft';
+import { createVoxelGrid } from '../voxel/voxelGrid';
 
 /** The result every structure-format parser produces, before culling/upscaling. `grid`'s cell
  *  values (and `blockIds`) are blockstate keys (see blockstateKey.ts), not bare block names — a
@@ -36,15 +37,7 @@ export function normalizeBlockName(name: string): string | null {
 }
 
 export function createEmptyGrid(sizeX: number, sizeY: number, sizeZ: number): VoxelGrid {
-  const voxels: (string | null)[][][] = [];
-  for (let x = 0; x < sizeX; x++) {
-    const plane: (string | null)[][] = [];
-    for (let y = 0; y < sizeY; y++) {
-      plane.push(new Array<string | null>(sizeZ).fill(null));
-    }
-    voxels.push(plane);
-  }
-  return { sizeX, sizeY, sizeZ, voxels };
+  return createVoxelGrid(sizeX, sizeY, sizeZ);
 }
 
 // --- Small typed NBT tag accessors, shared by both structure-format parsers. Each throws a

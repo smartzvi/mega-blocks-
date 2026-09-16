@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { nbt } from '../../types/nbt';
 import { parseVanillaStructure } from './parseVanillaStructure';
+import { getVoxel } from '../voxel/voxelGrid';
 
 describe('parseVanillaStructure', () => {
   it('parses a small structure into a dense VoxelGrid with the right blocks at the right positions', () => {
@@ -22,10 +23,10 @@ describe('parseVanillaStructure', () => {
     expect(grid.sizeX).toBe(2);
     expect(grid.sizeY).toBe(2);
     expect(grid.sizeZ).toBe(2);
-    expect(grid.voxels[0][0][0]).toBe('minecraft:oak_planks');
-    expect(grid.voxels[1][1][1]).toBe('minecraft:stone');
+    expect(getVoxel(grid, 0, 0, 0)).toBe('minecraft:oak_planks');
+    expect(getVoxel(grid, 1, 1, 1)).toBe('minecraft:stone');
     // Unlisted positions default to air (null), not left undefined.
-    expect(grid.voxels[0][1][0]).toBeNull();
+    expect(getVoxel(grid, 0, 1, 0)).toBeNull();
     expect(blockIds).toEqual(new Set(['minecraft:oak_planks', 'minecraft:stone']));
   });
 
@@ -40,7 +41,7 @@ describe('parseVanillaStructure', () => {
     });
 
     const { grid, blockIds } = parseVanillaStructure(root);
-    expect(grid.voxels[0][0][0]).toBeNull();
+    expect(getVoxel(grid, 0, 0, 0)).toBeNull();
     expect(blockIds.size).toBe(0);
   });
 
@@ -58,8 +59,8 @@ describe('parseVanillaStructure', () => {
     });
 
     const { grid, blockIds } = parseVanillaStructure(root);
-    expect(grid.voxels[0][0][0]).toBeNull();
-    expect(grid.voxels[0][0][1]).toBeNull();
+    expect(getVoxel(grid, 0, 0, 0)).toBeNull();
+    expect(getVoxel(grid, 0, 0, 1)).toBeNull();
     expect(blockIds.size).toBe(0);
   });
 
@@ -82,7 +83,7 @@ describe('parseVanillaStructure', () => {
     });
 
     const { grid, blockIds } = parseVanillaStructure(root);
-    expect(grid.voxels[0][0][0]).toBe('minecraft:oak_stairs[facing=east,half=bottom,shape=straight]');
+    expect(getVoxel(grid, 0, 0, 0)).toBe('minecraft:oak_stairs[facing=east,half=bottom,shape=straight]');
     expect(blockIds).toEqual(new Set(['minecraft:oak_stairs[facing=east,half=bottom,shape=straight]']));
   });
 

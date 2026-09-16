@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { nbt } from '../../types/nbt';
 import { bitsPerEntryFor, packLongArray } from '../nbt/bitpack';
 import { parseLitematic } from './parseLitematic';
+import { getVoxel } from '../voxel/voxelGrid';
 
 /** Builds a Regions.<name> compound from a flat (x,y,z)->name function, packing indices in the
  *  same y-outer/z-middle/x-inner order the real writer/reader both use. */
@@ -56,8 +57,8 @@ describe('parseLitematic', () => {
     expect(grid.sizeX).toBe(2);
     expect(grid.sizeY).toBe(2);
     expect(grid.sizeZ).toBe(2);
-    expect(grid.voxels[0][0][0]).toBe('minecraft:stone');
-    expect(grid.voxels[1][0][0]).toBeNull();
+    expect(getVoxel(grid, 0, 0, 0)).toBe('minecraft:stone');
+    expect(getVoxel(grid, 1, 0, 0)).toBeNull();
     expect(blockIds).toEqual(new Set(['minecraft:stone']));
   });
 
@@ -77,8 +78,8 @@ describe('parseLitematic', () => {
     expect(grid.sizeY).toBe(3);
     expect(grid.sizeZ).toBe(3);
     // World (10,10,10) maps to grid-local (2,2,2) once offset by the min-corner (8,8,8).
-    expect(grid.voxels[2][2][2]).toBe('minecraft:oak_planks');
-    expect(grid.voxels[0][0][0]).toBeNull();
+    expect(getVoxel(grid, 2, 2, 2)).toBe('minecraft:oak_planks');
+    expect(getVoxel(grid, 0, 0, 0)).toBeNull();
   });
 
   it('composites multiple regions into their union bounding box, with each region resolving its own palette', () => {
@@ -95,8 +96,8 @@ describe('parseLitematic', () => {
     const { grid, blockIds } = parseLitematic(root);
     // Union bounding box: A spans x[0,2), B spans x[3,5) -> combined x[0,5).
     expect(grid.sizeX).toBe(5);
-    expect(grid.voxels[0][0][0]).toBe('minecraft:stone'); // region A's own palette resolved correctly
-    expect(grid.voxels[3][0][0]).toBe('minecraft:oak_log'); // region B's own palette resolved correctly, not A's
+    expect(getVoxel(grid, 0, 0, 0)).toBe('minecraft:stone'); // region A's own palette resolved correctly
+    expect(getVoxel(grid, 3, 0, 0)).toBe('minecraft:oak_log'); // region B's own palette resolved correctly, not A's
     expect(blockIds).toEqual(new Set(['minecraft:stone', 'minecraft:oak_log']));
   });
 
@@ -112,7 +113,7 @@ describe('parseLitematic', () => {
     });
 
     const { grid } = parseLitematic(root);
-    expect(grid.voxels[0][0][0]).toBe('minecraft:glass');
+    expect(getVoxel(grid, 0, 0, 0)).toBe('minecraft:glass');
   });
 
   it('folds a palette entry\'s Properties into the cell\'s blockstate key', () => {
@@ -125,7 +126,7 @@ describe('parseLitematic', () => {
     });
 
     const { grid, blockIds } = parseLitematic(root);
-    expect(grid.voxels[0][0][0]).toBe('minecraft:oak_log[axis=x]');
+    expect(getVoxel(grid, 0, 0, 0)).toBe('minecraft:oak_log[axis=x]');
     expect(blockIds).toEqual(new Set(['minecraft:oak_log[axis=x]']));
   });
 

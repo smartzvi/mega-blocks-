@@ -41,7 +41,7 @@ describe('buildMobVoxelGrid', () => {
     // pig heightUnits=16, depthUnits=24 (computed from real geometry) -> resolutionY=16, resolutionZ=24 at scale 1.
     expect(grid.sizeY).toBe(16);
     expect(grid.sizeZ).toBe(24);
-    const nonNull = grid.voxels.flat(2).filter((v) => v !== null);
+    const nonNull = [...grid.voxels.values()];
     expect(nonNull.length).toBeGreaterThan(0);
     expect(nonNull.every((id) => id === 'minecraft:pink_wool')).toBe(true);
   });
@@ -56,7 +56,7 @@ describe('buildMobVoxelGrid', () => {
     expect(grid.sizeX).toBe(16);
     expect(grid.sizeY).toBe(32); // heightUnits=32 -> genuinely 2 blocks tall at resolution 16
     expect(grid.sizeZ).toBe(8);
-    const nonNull = grid.voxels.flat(2).filter((v) => v !== null);
+    const nonNull = [...grid.voxels.values()];
     expect(nonNull.length).toBeGreaterThan(0);
   });
 

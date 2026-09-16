@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { assembleShell } from './assembleShell';
 import type { FaceMatchGrid, FaceName, MatchedFaces } from '../../types/minecraft';
+import { countVoxels, getVoxel } from './voxelGrid';
 
 function uniformGrid(id: string, size: number): FaceMatchGrid {
   return Array.from({ length: size }, () => Array.from({ length: size }, () => id));
@@ -27,42 +28,35 @@ describe.each([
     expect(grid.sizeY).toBe(size);
     expect(grid.sizeZ).toBe(size);
 
-    let populated = 0;
-    for (let x = 0; x < size; x++) {
-      for (let y = 0; y < size; y++) {
-        for (let z = 0; z < size; z++) {
-          if (grid.voxels[x][y][z] !== null) populated++;
-        }
-      }
-    }
+    const populated = countVoxels(grid);
     expect(populated).toBe(size ** 3 - (size - 2) ** 3);
     expect(populated).toBe(expectedCount);
     // A clearly interior voxel must be air.
     const centerIsh = Math.floor(size / 2);
-    expect(grid.voxels[centerIsh][centerIsh][centerIsh]).toBeNull();
+    expect(getVoxel(grid, centerIsh, centerIsh, centerIsh)).toBeNull();
   });
 
   it('resolves corners via the top/bottom face (wins over all sides)', () => {
     const grid = assembleShell(fakeMatchedFaces(size));
-    expect(grid.voxels[0][max][0]).toBe('face-top');
-    expect(grid.voxels[max][max][max]).toBe('face-top');
-    expect(grid.voxels[0][0][0]).toBe('face-bottom');
-    expect(grid.voxels[max][0][max]).toBe('face-bottom');
+    expect(getVoxel(grid, 0, max, 0)).toBe('face-top');
+    expect(getVoxel(grid, max, max, max)).toBe('face-top');
+    expect(getVoxel(grid, 0, 0, 0)).toBe('face-bottom');
+    expect(getVoxel(grid, max, 0, max)).toBe('face-bottom');
   });
 
   it('resolves the 4 vertical edges via north/south winning over east/west', () => {
     const grid = assembleShell(fakeMatchedFaces(size));
-    expect(grid.voxels[0][mid][0]).toBe('face-north');
-    expect(grid.voxels[0][mid][max]).toBe('face-south');
-    expect(grid.voxels[max][mid][0]).toBe('face-north');
-    expect(grid.voxels[max][mid][max]).toBe('face-south');
+    expect(getVoxel(grid, 0, mid, 0)).toBe('face-north');
+    expect(getVoxel(grid, 0, mid, max)).toBe('face-south');
+    expect(getVoxel(grid, max, mid, 0)).toBe('face-north');
+    expect(getVoxel(grid, max, mid, max)).toBe('face-south');
   });
 
   it('resolves flat (single-face) regions directly', () => {
     const grid = assembleShell(fakeMatchedFaces(size));
-    expect(grid.voxels[0][mid][mid]).toBe('face-west');
-    expect(grid.voxels[max][mid][mid]).toBe('face-east');
-    expect(grid.voxels[mid][mid][0]).toBe('face-north');
-    expect(grid.voxels[mid][mid][max]).toBe('face-south');
+    expect(getVoxel(grid, 0, mid, mid)).toBe('face-west');
+    expect(getVoxel(grid, max, mid, mid)).toBe('face-east');
+    expect(getVoxel(grid, mid, mid, 0)).toBe('face-north');
+    expect(getVoxel(grid, mid, mid, max)).toBe('face-south');
   });
 });

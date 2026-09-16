@@ -1,5 +1,6 @@
 import type { MatchedFaces, VoxelGrid } from '../../types/minecraft';
 import { faceOwnsVoxel, isShellVoxel, worldToFaceUv } from './faceMapping';
+import { createVoxelGrid, setVoxel } from './voxelGrid';
 
 // Top/bottom checked first (they win at every corner and every top/bottom edge), then the 4
 // side faces in a fixed north > south > east > west order to resolve the 4 vertical edges
@@ -15,26 +16,19 @@ const FACE_PRIORITY = ['top', 'bottom', 'north', 'south', 'east', 'west'] as con
  */
 export function assembleShell(matchedFaces: MatchedFaces): VoxelGrid {
   const size = matchedFaces.top.length;
-  const voxels: (string | null)[][][] = [];
+  const grid = createVoxelGrid(size, size, size);
 
   for (let x = 0; x < size; x++) {
-    const plane: (string | null)[][] = [];
     for (let y = 0; y < size; y++) {
-      const column: (string | null)[] = [];
       for (let z = 0; z < size; z++) {
         const voxel = { x, y, z };
-        if (!isShellVoxel(voxel, size)) {
-          column.push(null);
-          continue;
-        }
+        if (!isShellVoxel(voxel, size)) continue;
         const face = FACE_PRIORITY.find((f) => faceOwnsVoxel(f, voxel, size))!;
         const { u, v } = worldToFaceUv(face, voxel, size);
-        column.push(matchedFaces[face][v][u]);
+        setVoxel(grid, x, y, z, matchedFaces[face][v][u]);
       }
-      plane.push(column);
     }
-    voxels.push(plane);
   }
 
-  return { sizeX: size, sizeY: size, sizeZ: size, voxels };
+  return grid;
 }

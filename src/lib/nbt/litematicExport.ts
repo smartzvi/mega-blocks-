@@ -4,6 +4,7 @@ import { writeNbt } from './nbtWriter';
 import { gzipBytes } from './gzip';
 import { bitsPerEntryFor, packLongArray } from './bitpack';
 import { DATA_VERSION } from '../blockstate/dataVersion';
+import { getVoxel } from '../voxel/voxelGrid';
 
 // Verified against Litemapy (github.com/SmylerMC/litemapy)'s info.py constants, not assumed.
 const LITEMATIC_VERSION = 6;
@@ -29,7 +30,7 @@ export function buildLitematicNbt(grid: VoxelGrid, name = 'Megablock'): NbtTag {
   for (let y = 0; y < sizeY; y++) {
     for (let z = 0; z < sizeZ; z++) {
       for (let x = 0; x < sizeX; x++) {
-        const blockId = grid.voxels[x][y][z] ?? AIR_ID;
+        const blockId = getVoxel(grid, x, y, z) ?? AIR_ID;
         let index = paletteIndex.get(blockId);
         if (index === undefined) {
           index = paletteIds.length;

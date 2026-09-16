@@ -6,6 +6,7 @@ import { decodeBlockstateKey } from './blockstateKey';
 import { resolveFallbackTextureKey } from './resolveFallbackTexture';
 import { filterPaletteForSource } from '../palette/glassSource';
 import { filterLightSourcesForSource } from '../palette/lightSourceExclusion';
+import { createVoxelGrid, setVoxel } from '../voxel/voxelGrid';
 
 type FileLoaderMap = Map<string, () => Promise<Uint8Array>>;
 
@@ -31,15 +32,13 @@ function buildMissingTexture(): FaceTexture {
 }
 
 function solidStamp(blockId: string, resolution: number): VoxelGrid {
-  const voxels: (string | null)[][][] = [];
+  const grid = createVoxelGrid(resolution, resolution, resolution);
   for (let x = 0; x < resolution; x++) {
-    const plane: (string | null)[][] = [];
     for (let y = 0; y < resolution; y++) {
-      plane.push(new Array<string | null>(resolution).fill(blockId));
+      for (let z = 0; z < resolution; z++) setVoxel(grid, x, y, z, blockId);
     }
-    voxels.push(plane);
   }
-  return { sizeX: resolution, sizeY: resolution, sizeZ: resolution, voxels };
+  return grid;
 }
 
 /**

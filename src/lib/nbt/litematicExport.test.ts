@@ -3,23 +3,19 @@ import * as prismarineNbt from 'prismarine-nbt';
 import { exportLitematic } from './litematicExport';
 import { DATA_VERSION } from '../blockstate/dataVersion';
 import type { VoxelGrid } from '../../types/minecraft';
+import { createVoxelGrid, setVoxel } from '../voxel/voxelGrid';
 
 function tinyGrid(): VoxelGrid {
-  return {
-    sizeX: 2,
-    sizeY: 2,
-    sizeZ: 2,
-    voxels: [
-      [
-        [null, 'minecraft:obsidian'],
-        ['minecraft:stone', 'minecraft:obsidian'],
-      ],
-      [
-        ['minecraft:stone', null],
-        ['minecraft:obsidian', 'minecraft:stone'],
-      ],
-    ],
-  };
+  const grid = createVoxelGrid(2, 2, 2);
+  // (0,0,0) stays air.
+  setVoxel(grid, 0, 0, 1, 'minecraft:obsidian');
+  setVoxel(grid, 0, 1, 0, 'minecraft:stone');
+  setVoxel(grid, 0, 1, 1, 'minecraft:obsidian');
+  setVoxel(grid, 1, 0, 0, 'minecraft:stone');
+  // (1,0,1) stays air.
+  setVoxel(grid, 1, 1, 0, 'minecraft:obsidian');
+  setVoxel(grid, 1, 1, 1, 'minecraft:stone');
+  return grid;
 }
 
 describe('exportLitematic', () => {
@@ -69,17 +65,12 @@ describe('exportLitematic', () => {
   it('reports distinct per-axis Size/EnclosingSize for a genuinely non-cubic grid (e.g. a 2-block-tall door)', async () => {
     // sizeX=sizeZ=2, sizeY=4 — a 2x4x2 grid, fully solid, standing in for a real door's
     // size×(2×size)×size shape at a tiny scale.
-    const voxels: (string | null)[][][] = [];
+    const grid = createVoxelGrid(2, 4, 2);
     for (let x = 0; x < 2; x++) {
-      const plane: (string | null)[][] = [];
       for (let y = 0; y < 4; y++) {
-        const column: (string | null)[] = [];
-        for (let z = 0; z < 2; z++) column.push('minecraft:oak_planks');
-        plane.push(column);
+        for (let z = 0; z < 2; z++) setVoxel(grid, x, y, z, 'minecraft:oak_planks');
       }
-      voxels.push(plane);
     }
-    const grid: VoxelGrid = { sizeX: 2, sizeY: 4, sizeZ: 2, voxels };
 
     const gzipped = exportLitematic(grid, 'TestDoor');
     const { parsed } = await prismarineNbt.parse(Buffer.from(gzipped), 'big');
@@ -97,17 +88,12 @@ describe('exportLitematic', () => {
   it('reports distinct per-axis Size/EnclosingSize for a genuinely non-cubic grid extended in Z (e.g. a 2-block-long bed)', async () => {
     // sizeX=sizeY=2, sizeZ=4 — a 2x2x4 grid, fully solid, standing in for a real bed's
     // size×size×(2×size) shape at a tiny scale.
-    const voxels: (string | null)[][][] = [];
+    const grid = createVoxelGrid(2, 2, 4);
     for (let x = 0; x < 2; x++) {
-      const plane: (string | null)[][] = [];
       for (let y = 0; y < 2; y++) {
-        const column: (string | null)[] = [];
-        for (let z = 0; z < 4; z++) column.push('minecraft:red_wool');
-        plane.push(column);
+        for (let z = 0; z < 4; z++) setVoxel(grid, x, y, z, 'minecraft:red_wool');
       }
-      voxels.push(plane);
     }
-    const grid: VoxelGrid = { sizeX: 2, sizeY: 2, sizeZ: 4, voxels };
 
     const gzipped = exportLitematic(grid, 'TestBed');
     const { parsed } = await prismarineNbt.parse(Buffer.from(gzipped), 'big');

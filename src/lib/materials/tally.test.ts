@@ -1,29 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { computeMaterialSummary, computeMaterialTally, formatMaterialListText } from './tally';
 import type { VoxelGrid } from '../../types/minecraft';
+import { createVoxelGrid, setVoxel } from '../voxel/voxelGrid';
 
 function gridFromCounts(counts: Record<string, number>): VoxelGrid {
-  // Flattens the requested per-block counts into a 1D run of cells, then reshapes into a
-  // voxels[x][y][z] cube just large enough to hold them (padding the rest with null/air).
-  const cells: (string | null)[] = [];
+  // Flattens the requested per-block counts into a 1D run of cells, then reshapes into a cube
+  // just large enough to hold them (the rest of the cube stays empty/air).
+  const cells: string[] = [];
   for (const [id, count] of Object.entries(counts)) {
     for (let i = 0; i < count; i++) cells.push(id);
   }
   const size = Math.ceil(Math.cbrt(cells.length)) || 1;
-  while (cells.length < size ** 3) cells.push(null);
 
-  const voxels: (string | null)[][][] = [];
+  const grid = createVoxelGrid(size, size, size);
   let idx = 0;
   for (let x = 0; x < size; x++) {
-    const plane: (string | null)[][] = [];
     for (let y = 0; y < size; y++) {
-      const column: (string | null)[] = [];
-      for (let z = 0; z < size; z++) column.push(cells[idx++]);
-      plane.push(column);
+      for (let z = 0; z < size; z++) {
+        if (idx < cells.length) setVoxel(grid, x, y, z, cells[idx]);
+        idx++;
+      }
     }
-    voxels.push(plane);
   }
-  return { sizeX: size, sizeY: size, sizeZ: size, voxels };
+  return grid;
 }
 
 describe('computeMaterialTally', () => {

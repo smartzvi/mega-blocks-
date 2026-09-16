@@ -1,4 +1,5 @@
 import type { VoxelGrid } from '../../types/minecraft';
+import { createVoxelGrid, forEachVoxel, getVoxel, setVoxel } from '../voxel/voxelGrid';
 
 /**
  * Block IDs matching any of these substrings never count as a solid neighbor for culling
@@ -57,32 +58,22 @@ const NEIGHBOR_OFFSETS: [number, number, number][] = [
  * counts as solid), since that's the visible outer shell.
  */
 export function cullInteriorVoxels(grid: VoxelGrid): VoxelGrid {
-  const { sizeX, sizeY, sizeZ, voxels } = grid;
+  const { sizeX, sizeY, sizeZ } = grid;
 
   const isOccludingSolidAt = (x: number, y: number, z: number): boolean => {
-    if (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ) return false;
-    const id = voxels[x][y][z];
+    const id = getVoxel(grid, x, y, z);
     return id !== null && !isNonOccluding(id);
   };
 
-  const culled: (string | null)[][][] = [];
-  for (let x = 0; x < sizeX; x++) {
-    const plane: (string | null)[][] = [];
-    for (let y = 0; y < sizeY; y++) {
-      const column: (string | null)[] = [];
-      for (let z = 0; z < sizeZ; z++) {
-        const id = voxels[x][y][z];
-        if (id === null || isNonOccluding(id)) {
-          column.push(id);
-          continue;
-        }
-        const fullyBuried = NEIGHBOR_OFFSETS.every(([dx, dy, dz]) => isOccludingSolidAt(x + dx, y + dy, z + dz));
-        column.push(fullyBuried ? null : id);
-      }
-      plane.push(column);
+  const culled = createVoxelGrid(sizeX, sizeY, sizeZ);
+  forEachVoxel(grid, (x, y, z, id) => {
+    if (isNonOccluding(id)) {
+      setVoxel(culled, x, y, z, id);
+      return;
     }
-    culled.push(plane);
-  }
+    const fullyBuried = NEIGHBOR_OFFSETS.every(([dx, dy, dz]) => isOccludingSolidAt(x + dx, y + dy, z + dz));
+    if (!fullyBuried) setVoxel(culled, x, y, z, id);
+  });
 
-  return { sizeX, sizeY, sizeZ, voxels: culled };
+  return culled;
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { FaceName, FaceTexture, PaletteEntry, VoxelGrid } from '../types/minecraft';
+import { forEachVoxel } from '../lib/voxel/voxelGrid';
 
 // THREE.BoxGeometry material group order is [+x, -x, +y, -y, +z, -z].
 const BOX_FACE_ORDER: FaceName[] = ['east', 'west', 'top', 'bottom', 'south', 'north'];
@@ -90,20 +91,15 @@ export function VoxelMesh({ grid, palette }: { grid: VoxelGrid; palette: Palette
   // React <mesh> element per solid voxel.
   const groups = useMemo(() => {
     const byBlock = new Map<string, [number, number, number][]>();
-    for (let x = 0; x < grid.sizeX; x++) {
-      for (let y = 0; y < grid.sizeY; y++) {
-        for (let z = 0; z < grid.sizeZ; z++) {
-          const blockId = grid.voxels[x][y][z];
-          if (!blockId || !materialsByBlock.has(blockId)) continue;
-          let list = byBlock.get(blockId);
-          if (!list) {
-            list = [];
-            byBlock.set(blockId, list);
-          }
-          list.push([x - offsetX, y - offsetY, z - offsetZ]);
-        }
+    forEachVoxel(grid, (x, y, z, blockId) => {
+      if (!materialsByBlock.has(blockId)) return;
+      let list = byBlock.get(blockId);
+      if (!list) {
+        list = [];
+        byBlock.set(blockId, list);
       }
-    }
+      list.push([x - offsetX, y - offsetY, z - offsetZ]);
+    });
     return [...byBlock.entries()].map(([blockId, positions]) => ({ blockId, positions }));
   }, [grid, materialsByBlock, offsetX, offsetY, offsetZ]);
 

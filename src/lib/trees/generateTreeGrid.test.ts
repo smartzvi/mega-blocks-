@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateTreeGrid, TREE_SPECIES_NAMES } from './generateTreeGrid';
+import { getVoxel } from '../voxel/voxelGrid';
 
 describe('TREE_SPECIES_NAMES', () => {
   it('lists exactly oak and birch, sorted', () => {
@@ -20,14 +21,14 @@ describe('generateTreeGrid', () => {
     const { grid } = generateTreeGrid('oak');
     const center = 2; // radius 2 -> center index 2 of a 5-wide grid
     for (let y = 0; y <= 4; y++) {
-      expect(grid.voxels[center][y][center]).toBe('minecraft:oak_log[axis=y]');
+      expect(getVoxel(grid, center, y, center)).toBe('minecraft:oak_log[axis=y]');
     }
   });
 
   it('caps the trunk with a leaf, not an exposed log end — one leaf layer above the topmost log', () => {
     const { grid } = generateTreeGrid('oak');
     const center = 2;
-    expect(grid.voxels[center][5][center]).toBe('minecraft:oak_leaves[distance=7,persistent=false,waterlogged=false]');
+    expect(getVoxel(grid, center, 5, center)).toBe('minecraft:oak_leaves[distance=7,persistent=false,waterlogged=false]');
   });
 
   it('clips the 4 extreme corners of each full-radius leaf layer (the real blob-canopy look), leaving every other cell in that radius a leaf', () => {
@@ -37,7 +38,7 @@ describe('generateTreeGrid', () => {
     // Corners (dx,dz = ±2,±2) clipped:
     for (const dx of [-2, 2]) {
       for (const dz of [-2, 2]) {
-        expect(grid.voxels[2 + dx][y][2 + dz]).toBeNull();
+        expect(getVoxel(grid, 2 + dx, y, 2 + dz)).toBeNull();
       }
     }
     // Every other cell within radius 2 (excluding the trunk's own center column) is a leaf.
@@ -46,7 +47,7 @@ describe('generateTreeGrid', () => {
         const isCorner = Math.abs(dx) === 2 && Math.abs(dz) === 2;
         const isTrunkCenter = dx === 0 && dz === 0;
         if (isCorner || isTrunkCenter) continue;
-        expect(grid.voxels[2 + dx][y][2 + dz]).toBe(leafKey);
+        expect(getVoxel(grid, 2 + dx, y, 2 + dz)).toBe(leafKey);
       }
     }
   });
@@ -55,9 +56,9 @@ describe('generateTreeGrid', () => {
     const { grid } = generateTreeGrid('oak');
     const center = 2;
     // y=2 sits below the canopy now (bottomLeafY=3) — bare trunk, no leaves wrapped around it.
-    expect(grid.voxels[center][2][center]).toBe('minecraft:oak_log[axis=y]');
-    expect(grid.voxels[center + 2][2][center]).toBeNull();
-    expect(grid.voxels[center][2][center + 2]).toBeNull();
+    expect(getVoxel(grid, center, 2, center)).toBe('minecraft:oak_log[axis=y]');
+    expect(getVoxel(grid, center + 2, 2, center)).toBeNull();
+    expect(getVoxel(grid, center, 2, center + 2)).toBeNull();
   });
 
   it('tapers to a smaller radius (a plus/cross shape) at the very top leaf layer', () => {
@@ -65,17 +66,17 @@ describe('generateTreeGrid', () => {
     const leafKey = 'minecraft:oak_leaves[distance=7,persistent=false,waterlogged=false]';
     const y = 5; // topLeafY, radius R-1 = 1
     // Center and the 4 orthogonal neighbors are leaves...
-    expect(grid.voxels[2][y][2]).toBe(leafKey);
-    expect(grid.voxels[3][y][2]).toBe(leafKey);
-    expect(grid.voxels[1][y][2]).toBe(leafKey);
-    expect(grid.voxels[2][y][3]).toBe(leafKey);
-    expect(grid.voxels[2][y][1]).toBe(leafKey);
+    expect(getVoxel(grid, 2, y, 2)).toBe(leafKey);
+    expect(getVoxel(grid, 3, y, 2)).toBe(leafKey);
+    expect(getVoxel(grid, 1, y, 2)).toBe(leafKey);
+    expect(getVoxel(grid, 2, y, 3)).toBe(leafKey);
+    expect(getVoxel(grid, 2, y, 1)).toBe(leafKey);
     // ...but the diagonal corners at this smaller radius are clipped, same rule as every layer.
-    expect(grid.voxels[3][y][3]).toBeNull();
-    expect(grid.voxels[1][y][1]).toBeNull();
+    expect(getVoxel(grid, 3, y, 3)).toBeNull();
+    expect(getVoxel(grid, 1, y, 1)).toBeNull();
     // And nothing at all extends out to the full radius 2 on this layer.
-    expect(grid.voxels[0][y][2]).toBeNull();
-    expect(grid.voxels[4][y][2]).toBeNull();
+    expect(getVoxel(grid, 0, y, 2)).toBeNull();
+    expect(getVoxel(grid, 4, y, 2)).toBeNull();
   });
 
   it("builds birch at its own real recipe's taller trunk (height 6), same 5x5 canopy footprint as oak", () => {
@@ -88,19 +89,21 @@ describe('generateTreeGrid', () => {
     );
     const center = 2;
     for (let y = 0; y <= 5; y++) {
-      expect(grid.voxels[center][y][center]).toBe('minecraft:birch_log[axis=y]');
+      expect(getVoxel(grid, center, y, center)).toBe('minecraft:birch_log[axis=y]');
     }
   });
 
-  it('never places a voxel outside the returned grid bounds (every array dimension matches sizeX/sizeY/sizeZ)', () => {
+  it('never places a voxel outside the returned grid bounds', () => {
     for (const species of TREE_SPECIES_NAMES) {
       const { grid } = generateTreeGrid(species);
-      expect(grid.voxels.length).toBe(grid.sizeX);
-      for (const plane of grid.voxels) {
-        expect(plane.length).toBe(grid.sizeY);
-        for (const column of plane) {
-          expect(column.length).toBe(grid.sizeZ);
-        }
+      for (const key of grid.voxels.keys()) {
+        const [x, y, z] = key.split(',').map(Number);
+        expect(x).toBeGreaterThanOrEqual(0);
+        expect(x).toBeLessThan(grid.sizeX);
+        expect(y).toBeGreaterThanOrEqual(0);
+        expect(y).toBeLessThan(grid.sizeY);
+        expect(z).toBeGreaterThanOrEqual(0);
+        expect(z).toBeLessThan(grid.sizeZ);
       }
     }
   });

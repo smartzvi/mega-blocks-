@@ -3,6 +3,7 @@ import { averageColorHsv, averageColorLab } from '../color/averageColor';
 import type { FaceTexture, MaterialFamily, PaletteEntry } from '../../types/minecraft';
 import { encodeBlockstateKey } from './blockstateKey';
 import { buildStructureBlockStamp } from './buildStructureBlockStamp';
+import { countVoxels, getVoxel } from '../voxel/voxelGrid';
 
 function fakeFiles(files: Record<string, unknown>) {
   const map = new Map<string, () => Promise<Uint8Array>>();
@@ -68,12 +69,12 @@ describe('buildStructureBlockStamp', () => {
     expect(stamp.sizeX).toBe(16);
     expect(stamp.sizeY).toBe(16);
     expect(stamp.sizeZ).toBe(16);
-    const nonNull = stamp.voxels.flat(2).filter((v) => v !== null);
-    expect(nonNull.length).toBeGreaterThan(0);
+    const solidCount = countVoxels(stamp);
+    expect(solidCount).toBeGreaterThan(0);
     // Not a uniform solid cube — the door panel only occupies x=0..2 of 16, so the real engine's
     // actual shape must have run (unlike the flat-fallback path, which fills every single cell).
-    expect(nonNull.length).toBeLessThan(16 * 16 * 16);
-    expect(stamp.voxels[10][8][8]).toBeNull(); // well outside the thin panel's x=0..2 footprint
+    expect(solidCount).toBeLessThan(16 * 16 * 16);
+    expect(getVoxel(stamp, 10, 8, 8)).toBeNull(); // well outside the thin panel's x=0..2 footprint
   });
 
   it('falls back to a single flat matched color for a hand-authored multi-cell block (bed) — filling the whole stamp solid', async () => {
@@ -87,8 +88,8 @@ describe('buildStructureBlockStamp', () => {
     expect(stamp.sizeX).toBe(16);
     expect(stamp.sizeY).toBe(16);
     expect(stamp.sizeZ).toBe(16);
-    const all = stamp.voxels.flat(2);
-    expect(all.every((v) => v === 'minecraft:bed_color')).toBe(true);
+    expect(countVoxels(stamp)).toBe(16 ** 3);
+    expect([...stamp.voxels.values()].every((v) => v === 'minecraft:bed_color')).toBe(true);
   });
 
   it('falls back to a placeholder-matched solid color when nothing resolves at all, never throwing', async () => {
@@ -98,8 +99,9 @@ describe('buildStructureBlockStamp', () => {
 
     const stamp = await buildStructureBlockStamp(key, noFiles, noFiles, noDecode, palette, 16);
 
-    const all = stamp.voxels.flat(2);
-    expect(all.every((v) => v === all[0] && v !== null)).toBe(true);
+    const all = [...stamp.voxels.values()];
+    expect(countVoxels(stamp)).toBe(16 ** 3);
+    expect(all.every((v) => v === all[0])).toBe(true);
   });
 
   it('throws when the palette is empty, instead of silently matching against nothing', async () => {

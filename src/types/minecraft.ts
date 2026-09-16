@@ -64,8 +64,14 @@ export interface VoxelGrid {
   sizeX: number;
   sizeY: number;
   sizeZ: number;
-  /** voxels[x][y][z] = palette block id, or null for air (interior). */
-  voxels: (string | null)[][][];
+  /** Sparse: absence of a `${x},${y},${z}` key means air, exactly like a `null` cell in the old
+   *  dense `(string|null)[][][]` array this replaced. A dense array's allocation is sized by the
+   *  full bounding box regardless of how much of it is actually solid — for a shape whose real
+   *  content is a small fraction of its bounding box (a tree's rounded canopy, a thin fence line),
+   *  that padding is exactly what made higher resolutions hit the memory-safety cap for no real
+   *  reason. Never index this directly — use getVoxel/setVoxel/forEachVoxel/cloneVoxelGrid
+   *  (lib/voxel/voxelGrid.ts), which every producer/consumer in the app already goes through. */
+  voxels: Map<string, string>;
 }
 
 /**

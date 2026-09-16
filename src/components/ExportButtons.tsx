@@ -3,6 +3,7 @@ import { useAppState } from '../state/AppContext';
 import { useFinalVoxelGrid } from '../state/useFinalVoxelGrid';
 import { exportLitematic } from '../lib/nbt/litematicExport';
 import { exportVanillaStructureNbt } from '../lib/nbt/vanillaStructureExport';
+import { countVoxels } from '../lib/voxel/voxelGrid';
 
 function downloadBytes(bytes: Uint8Array, filename: string) {
   const blob = new Blob([bytes as BlobPart], { type: 'application/octet-stream' });
@@ -47,7 +48,7 @@ export function ExportButtons() {
 
   // Re-flattening a multi-million-voxel structure grid on every render would be a real cost at
   // that scale (harmless at block/item mode's ≤64³ ceiling, where this was previously unmemoized).
-  const blockCount = useMemo(() => (voxelGrid ? voxelGrid.voxels.flat(2).filter((id) => id !== null).length : 0), [voxelGrid]);
+  const blockCount = useMemo(() => (voxelGrid ? countVoxels(voxelGrid) : 0), [voxelGrid]);
 
   if (!voxelGrid || !sourceName) return null;
 

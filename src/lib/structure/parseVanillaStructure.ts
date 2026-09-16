@@ -11,6 +11,7 @@ import {
   type ParsedStructure,
 } from './common';
 import { MAX_SOURCE_VOLUME, checkVolume } from './safetyLimits';
+import { setVoxel } from '../voxel/voxelGrid';
 
 /** Parses the vanilla /structure-save NBT schema: `size` (3 ints), `palette` (list of
  *  `{Name, Properties?}` — Properties kept and folded into each cell's blockstate key, see
@@ -51,7 +52,7 @@ export function parseVanillaStructure(root: NbtTag): ParsedStructure {
     }
     const name = normalizeBlockName(paletteEntry.name);
     const key = name ? encodeBlockstateKey(name, paletteEntry.properties) : null;
-    grid.voxels[x][y][z] = key;
+    setVoxel(grid, x, y, z, key);
     if (key) blockIds.add(key);
   }
 

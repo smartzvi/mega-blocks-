@@ -5,6 +5,7 @@ import { rgbToHsv } from '../color/hsv';
 import { matchPixel } from '../matching/matchFace';
 import { FACE_AXES, FACE_PRIORITY, NEIGHBOR_OFFSET, axisValue } from './faceGeometry';
 import { resolveTexturePath, texturePathToKey } from './resolveTextureVariable';
+import { createVoxelGrid, setVoxel } from '../voxel/voxelGrid';
 
 const MODEL_SPACE_SIZE = 16;
 
@@ -199,18 +200,15 @@ export function rasterizeItemModel(
     return null;
   }
 
-  const voxels: (string | null)[][][] = [];
+  const grid = createVoxelGrid(resolution, resolutionY, resolutionZ);
   for (let x = 0; x < resolution; x++) {
-    const plane: (string | null)[][] = [];
     for (let y = 0; y < resolutionY; y++) {
-      const column: (string | null)[] = [];
       for (let z = 0; z < resolutionZ; z++) {
-        column.push(colorVoxel(x, y, z));
+        const color = colorVoxel(x, y, z);
+        if (color) setVoxel(grid, x, y, z, color);
       }
-      plane.push(column);
     }
-    voxels.push(plane);
   }
 
-  return { sizeX: resolution, sizeY: resolutionY, sizeZ: resolutionZ, voxels };
+  return grid;
 }

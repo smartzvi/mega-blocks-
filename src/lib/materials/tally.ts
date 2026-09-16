@@ -1,4 +1,5 @@
 import type { VoxelGrid } from '../../types/minecraft';
+import { forEachVoxel } from '../voxel/voxelGrid';
 
 export const STACK_SIZE = 64;
 export const SLOTS_PER_SHULKER = 27;
@@ -24,14 +25,9 @@ export interface MaterialSummary {
 export function computeMaterialTally(grid: VoxelGrid): MaterialEntry[] {
   const counts = new Map<string, number>();
 
-  for (const plane of grid.voxels) {
-    for (const column of plane) {
-      for (const id of column) {
-        if (id === null) continue;
-        counts.set(id, (counts.get(id) ?? 0) + 1);
-      }
-    }
-  }
+  forEachVoxel(grid, (_x, _y, _z, id) => {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  });
 
   const entries: MaterialEntry[] = [];
   for (const [blockId, count] of counts) {

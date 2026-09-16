@@ -1,5 +1,6 @@
 import type { BlockShape, FaceName, MatchedFaces, VoxelGrid } from '../../types/minecraft';
 import { worldToFaceUv } from './faceMapping';
+import { cloneVoxelGrid, setVoxel } from './voxelGrid';
 
 /**
  * Trims the assembled hollow-shell cube down to an approximation of a common partial-block
@@ -19,73 +20,65 @@ export function applyShapeCutout(grid: VoxelGrid, matchedFaces: MatchedFaces, sh
   if (shape === 'full_cube') return grid;
 
   const size = grid.sizeX; // block-mode grids are always cubic (sizeX === sizeY === sizeZ)
-  const voxels = grid.voxels.map((plane) => plane.map((column) => column.slice()));
+  const cut = cloneVoxelGrid(grid);
 
   switch (shape) {
     case 'slab':
-      applySlab(voxels, matchedFaces, size);
+      applySlab(cut, matchedFaces, size);
       break;
     case 'stair':
-      applyStair(voxels, matchedFaces, size);
+      applyStair(cut, matchedFaces, size);
       break;
     case 'door':
-      applyDoor(voxels, matchedFaces, size);
+      applyDoor(cut, matchedFaces, size);
       break;
   }
 
-  return { sizeX: size, sizeY: size, sizeZ: size, voxels };
+  return cut;
 }
 
-function capCell(
-  voxels: (string | null)[][][],
-  matchedFaces: MatchedFaces,
-  face: FaceName,
-  x: number,
-  y: number,
-  z: number,
-  size: number
-) {
+function capCell(grid: VoxelGrid, matchedFaces: MatchedFaces, face: FaceName, x: number, y: number, z: number, size: number) {
   const { u, v } = worldToFaceUv(face, { x, y, z }, size);
-  voxels[x][y][z] = matchedFaces[face][v][u];
+  setVoxel(grid, x, y, z, matchedFaces[face][v][u]);
 }
 
 /** Bottom slab: keep the lower half height, full footprint. Caps the new flat top with the
  *  original top-face grid so the cut looks like a proper flat slab surface, not a hollow rim. */
-function applySlab(voxels: (string | null)[][][], matchedFaces: MatchedFaces, size: number) {
+function applySlab(grid: VoxelGrid, matchedFaces: MatchedFaces, size: number) {
   const cutY = size / 2; // keep y in [0, cutY)
 
   for (let x = 0; x < size; x++) {
     for (let z = 0; z < size; z++) {
-      for (let y = cutY; y < size; y++) voxels[x][y][z] = null;
+      for (let y = cutY; y < size; y++) setVoxel(grid, x, y, z, null);
     }
   }
 
   for (let x = 0; x < size; x++) {
-    for (let z = 0; z < size; z++) capCell(voxels, matchedFaces, 'top', x, cutY - 1, z, size);
+    for (let z = 0; z < size; z++) capCell(grid, matchedFaces, 'top', x, cutY - 1, z, size);
   }
 }
 
 /** Stair: a full-footprint bottom half slab plus a half-depth ("back half") upper block,
  *  forming an L-shaped side profile. Caps the newly exposed horizontal tread (top-face grid)
  *  and vertical riser (south-face grid) so both new surfaces read as solid, not hollow. */
-function applyStair(voxels: (string | null)[][][], matchedFaces: MatchedFaces, size: number) {
+function applyStair(grid: VoxelGrid, matchedFaces: MatchedFaces, size: number) {
   const cutY = size / 2;
   const cutZ = size / 2;
 
   for (let x = 0; x < size; x++) {
     for (let y = cutY; y < size; y++) {
-      for (let z = cutZ; z < size; z++) voxels[x][y][z] = null;
+      for (let z = cutZ; z < size; z++) setVoxel(grid, x, y, z, null);
     }
   }
 
   // Tread: the newly exposed horizontal surface over the front (z >= cutZ) half.
   for (let x = 0; x < size; x++) {
-    for (let z = cutZ; z < size; z++) capCell(voxels, matchedFaces, 'top', x, cutY - 1, z, size);
+    for (let z = cutZ; z < size; z++) capCell(grid, matchedFaces, 'top', x, cutY - 1, z, size);
   }
 
   // Riser: the newly exposed vertical surface over the back-top (y >= cutY) half.
   for (let x = 0; x < size; x++) {
-    for (let y = cutY; y < size; y++) capCell(voxels, matchedFaces, 'south', x, y, cutZ - 1, size);
+    for (let y = cutY; y < size; y++) capCell(grid, matchedFaces, 'south', x, y, cutZ - 1, size);
   }
 }
 
@@ -96,7 +89,7 @@ function applyStair(voxels: (string | null)[][][], matchedFaces: MatchedFaces, s
  *  door-shaped instead of a flat square slab. Caps the newly exposed back plane (south grid) and
  *  the two newly exposed side cuts (west/east grids) so every new surface looks solid, not hollow.
  */
-function applyDoor(voxels: (string | null)[][][], matchedFaces: MatchedFaces, size: number) {
+function applyDoor(grid: VoxelGrid, matchedFaces: MatchedFaces, size: number) {
   const cutZ = Math.max(1, Math.round(size / 8)); // keep z in [0, cutZ)
   const doorWidth = Math.max(1, Math.round(size / 2)); // keep x in [marginX, marginX + doorWidth)
   const marginX = Math.round((size - doorWidth) / 2);
@@ -105,21 +98,21 @@ function applyDoor(voxels: (string | null)[][][], matchedFaces: MatchedFaces, si
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
       for (let z = 0; z < size; z++) {
-        if (z >= cutZ || x < marginX || x > xMax) voxels[x][y][z] = null;
+        if (z >= cutZ || x < marginX || x > xMax) setVoxel(grid, x, y, z, null);
       }
     }
   }
 
   // Back: the newly exposed plane at the cut depth, within the narrowed width only.
   for (let x = marginX; x <= xMax; x++) {
-    for (let y = 0; y < size; y++) capCell(voxels, matchedFaces, 'south', x, y, cutZ - 1, size);
+    for (let y = 0; y < size; y++) capCell(grid, matchedFaces, 'south', x, y, cutZ - 1, size);
   }
 
   // Sides: the two newly exposed vertical strips left by narrowing the width.
   for (let y = 0; y < size; y++) {
     for (let z = 0; z < cutZ; z++) {
-      capCell(voxels, matchedFaces, 'west', marginX, y, z, size);
-      capCell(voxels, matchedFaces, 'east', xMax, y, z, size);
+      capCell(grid, matchedFaces, 'west', marginX, y, z, size);
+      capCell(grid, matchedFaces, 'east', xMax, y, z, size);
     }
   }
 }
