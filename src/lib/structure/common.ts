@@ -32,8 +32,23 @@ export const AIR_LIKE_BLOCKS = new Set([
   'minecraft:structure_block',
 ]);
 
+/** Small loose furnishings real village houses place inside their shell — a bed, a window pane —
+ *  per explicit user request to strip a house down to just its architectural shell (walls/floor/
+ *  roof, plus wall torches — kept per follow-up request) when voxelizing it as a megablock.
+ *  Matched by substring against the bare block name (same technique cullInteriorVoxels.ts's
+ *  NON_OCCLUDING_PATTERNS uses), so every color variant is covered without listing all 16 dye
+ *  colors twice over (`bed`/`glass_pane`). Deliberately narrow to just these two — a chest,
+ *  crafting table, or furnace is a real functional fixture a user might actually want represented,
+ *  not obviously-removable clutter the way a stray pane is at megablock scale. */
+const NON_STRUCTURAL_FURNISHING_PATTERNS = ['bed', 'glass_pane'];
+
+function isNonStructuralFurnishing(name: string): boolean {
+  const bareName = name.replace('minecraft:', '');
+  return NON_STRUCTURAL_FURNISHING_PATTERNS.some((pattern) => bareName.includes(pattern));
+}
+
 export function normalizeBlockName(name: string): string | null {
-  return AIR_LIKE_BLOCKS.has(name) ? null : name;
+  return AIR_LIKE_BLOCKS.has(name) || isNonStructuralFurnishing(name) ? null : name;
 }
 
 export function createEmptyGrid(sizeX: number, sizeY: number, sizeZ: number): VoxelGrid {
