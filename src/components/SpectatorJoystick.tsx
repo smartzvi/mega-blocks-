@@ -3,6 +3,12 @@ import type { MoveVector } from './SpectatorRig';
 
 const RADIUS = 40; // px — half the outer ring's diameter, how far the knob can travel
 
+/** This stick only ever drives horizontal movement — vertical is SpectatorVerticalButtons.tsx's
+ *  job — so its own `onChange` reports just those two fields rather than the full MoveVector,
+ *  making it a type error to accidentally pass this straight into a `{...moveVector}` spread that
+ *  would clobber whatever `y` the up/down buttons had set. */
+type HorizontalVector = Pick<MoveVector, 'x' | 'z'>;
+
 /**
  * On-screen virtual joystick for moving through spectator mode on any device (a mouse can drag it
  * too, not just touch) — SpectatorRig.tsx's drag-to-look gesture already covers the canvas itself,
@@ -12,7 +18,7 @@ const RADIUS = 40; // px — half the outer ring's diameter, how far the knob ca
  * pointer events with `stopPropagation` so dragging the knob can never also register as a
  * look-drag on the canvas underneath it.
  */
-export function SpectatorJoystick({ onChange }: { onChange: (vector: MoveVector) => void }) {
+export function SpectatorJoystick({ onChange }: { onChange: (vector: HorizontalVector) => void }) {
   const baseRef = useRef<HTMLDivElement>(null);
   const [knob, setKnob] = useState({ x: 0, y: 0 });
   const draggingId = useRef<number | null>(null);

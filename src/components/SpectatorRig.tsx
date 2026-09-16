@@ -2,11 +2,15 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
-/** Forward/strafe/vertical contribution, -1..1 per axis — shared shape for both the keyboard map
- *  below and the on-screen joystick (SpectatorJoystick.tsx), so SpectatorRig can just add them
- *  together regardless of which input actually produced them. */
+/** Forward/strafe/vertical contribution, -1..1 per axis — shared shape for the keyboard map
+ *  below, the on-screen joystick (SpectatorJoystick.tsx, x/z only), and the up/down buttons
+ *  (SpectatorVerticalButtons.tsx, y only), so SpectatorRig can just add them together every frame
+ *  regardless of which input actually produced them. PreviewScene.tsx owns one shared instance and
+ *  has each control mutate only its own field(s) — never replace the whole object — so e.g.
+ *  pressing "up" doesn't erase whatever the joystick already set for x/z, and vice versa. */
 export interface MoveVector {
   x: number; // strafe: -1 left .. 1 right
+  y: number; // -1 down .. 1 up
   z: number; // -1 back .. 1 forward
 }
 
@@ -36,11 +40,12 @@ const LOOK_SENSITIVITY = 0.0025;
  *   view, exactly like OrbitControls' own drag gesture, just changing the camera's orientation
  *   instead of orbiting a target. No Pointer Lock API involved (unlike a typical FPS control
  *   scheme) specifically so this keeps working on touch devices, which don't support it.
- * - Move: WASD/arrow keys + Space/Shift (desktop), or the on-screen joystick's vector (any
- *   device) — added together, so e.g. holding W while also dragging the joystick just moves
- *   faster rather than one overriding the other. Movement is relative to where the camera is
- *   currently looking (flattened to the horizontal plane for forward/strafe, matching how
- *   Minecraft's own spectator mode moves), not the world axes.
+ * - Move: WASD/arrow keys + Space/Shift (desktop), or the on-screen joystick (horizontal) plus
+ *   up/down buttons (vertical) — any device, and all of it added together, so e.g. holding W
+ *   while also dragging the joystick just moves faster rather than one overriding the other.
+ *   Horizontal movement is relative to where the camera is currently looking (flattened to the
+ *   horizontal plane for forward/strafe, matching how Minecraft's own spectator mode moves), not
+ *   the world axes; vertical movement is always along the true world Y axis regardless of pitch.
  *
  * Initializes its internal yaw/pitch from the camera's current orientation on mount, so switching
  * from OrbitControls into spectator mode continues from the same view instead of snapping to a
@@ -122,6 +127,7 @@ export function SpectatorRig({ moveSpeed, joystickRef }: { moveSpeed: number; jo
       moveZ += v[2];
     }
     moveX += joystickRef.current.x;
+    moveY += joystickRef.current.y;
     moveZ += joystickRef.current.z;
     if (moveX === 0 && moveY === 0 && moveZ === 0) return;
 

@@ -7,6 +7,7 @@ import { useFinalPalette } from '../state/useFinalPalette';
 import { VoxelMesh } from './VoxelMesh';
 import { SpectatorRig, type MoveVector } from './SpectatorRig';
 import { SpectatorJoystick } from './SpectatorJoystick';
+import { SpectatorVerticalButtons } from './SpectatorVerticalButtons';
 
 export function PreviewScene() {
   const state = useAppState();
@@ -18,8 +19,11 @@ export function PreviewScene() {
   // orbit mode needs a fresh instance to land back on the original framing, not just a toggle.
   const [resetCount, setResetCount] = useState(0);
   // A ref, not state — SpectatorRig reads this every frame; routing it through React state would
-  // re-render the whole scene on every joystick pixel of movement for no benefit.
-  const joystickVector = useRef<MoveVector>({ x: 0, z: 0 });
+  // re-render the whole scene on every joystick/button pixel of movement for no benefit. One
+  // shared object mutated in place by three independent inputs (joystick: x/z, vertical buttons:
+  // y, keyboard: read directly inside SpectatorRig) — see MoveVector's own doc for why each input
+  // only ever touches its own field(s) rather than replacing the whole object.
+  const moveVector = useRef<MoveVector>({ x: 0, y: 0, z: 0 });
 
   const exitSpectatorMode = useCallback(() => {
     setIsSpectating(false);
@@ -61,19 +65,19 @@ export function PreviewScene() {
     <div className="w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-[0_0_50px_-12px_rgba(16,185,129,0.15)]">
       <div className="flex items-center justify-between border-b border-slate-800 px-4 py-2.5">
         <span className="text-xs font-medium uppercase tracking-wider text-slate-500">3D Preview</span>
-        <div className="flex items-center gap-3">
-          <span className="hidden text-xs text-slate-600 sm:inline">
-            {isSpectating ? 'drag to look · WASD/joystick to move · Esc to exit' : 'drag to rotate · scroll to zoom'}
-          </span>
-          {isSpectating ? (
-            <button
-              type="button"
-              onClick={exitSpectatorMode}
-              className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
-            >
-              Exit spectator mode
-            </button>
-          ) : (
+        {isSpectating ? (
+          <button
+            type="button"
+            onClick={exitSpectatorMode}
+            title="Exit spectator mode"
+            aria-label="Exit spectator mode"
+            className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-sm leading-none text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+          >
+            ✕
+          </button>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="hidden text-xs text-slate-600 sm:inline">drag to rotate · scroll to zoom</span>
             <button
               type="button"
               onClick={() => setIsSpectating(true)}
@@ -83,8 +87,8 @@ export function PreviewScene() {
             >
               🎮
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       <div className="relative h-[480px] w-full bg-gradient-to-b from-slate-900 to-slate-950">
         <Canvas>
@@ -94,19 +98,27 @@ export function PreviewScene() {
           <directionalLight position={[-10, -10, -10]} intensity={0.3} />
           <VoxelMesh grid={voxelGrid} palette={palette} />
           {isSpectating ? (
-            <SpectatorRig moveSpeed={moveSpeed} joystickRef={joystickVector} />
+            <SpectatorRig moveSpeed={moveSpeed} joystickRef={moveVector} />
           ) : (
             <OrbitControls key={resetCount} enableDamping target={[0, 0, 0]} />
           )}
         </Canvas>
+        {/* Spectating shows only the movement controls themselves — no instructional text
+            cluttering the render — since the joystick and buttons are self-explanatory and the
+            exit control already lives in the header above. */}
         {isSpectating && (
           <div className="pointer-events-none absolute inset-0 flex items-end justify-between p-4">
             <div className="pointer-events-auto">
-              <SpectatorJoystick onChange={(v) => (joystickVector.current = v)} />
+              <SpectatorJoystick
+                onChange={(v) => {
+                  moveVector.current.x = v.x;
+                  moveVector.current.z = v.z;
+                }}
+              />
             </div>
-            <span className="pointer-events-none rounded-lg bg-slate-950/70 px-2.5 py-1.5 text-[11px] text-slate-400 sm:hidden">
-              Drag to look · joystick to move
-            </span>
+            <div className="pointer-events-auto">
+              <SpectatorVerticalButtons onChange={(y) => (moveVector.current.y = y)} />
+            </div>
           </div>
         )}
       </div>
