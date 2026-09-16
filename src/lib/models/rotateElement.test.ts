@@ -9,6 +9,12 @@ describe('rotateElementY', () => {
   });
 
   it('rotates a real ladder-like plane 90 degrees and relabels north/south to east/west', () => {
+    // Real ladder.json's plane sits at z=15.2 (flush against the block's south wall) for the
+    // unrotated facing=north variant. A real facing=east ladder (real oak/ladder blockstate:
+    // facing=east -> y:90) is mounted on the block's WEST wall instead (confirmed real-game
+    // behavior — you climb it approaching from the east) — so after a correct 90° turn this
+    // plane must land near x=0 (here 0.8, mirroring the original's 0.8-from-the-boundary offset),
+    // not near x=16.
     const el: BlockModelElement = {
       from: [0, 0, 15.2],
       to: [16, 16, 15.2],
@@ -18,8 +24,12 @@ describe('rotateElementY', () => {
       },
     };
     const rotated = rotateElementY(el, 90);
-    expect(rotated.from).toEqual([15.2, 0, 0]);
-    expect(rotated.to).toEqual([15.2, 16, 16]);
+    expect(rotated.from[0]).toBeCloseTo(0.8);
+    expect(rotated.from[1]).toBe(0);
+    expect(rotated.from[2]).toBe(0);
+    expect(rotated.to[0]).toBeCloseTo(0.8);
+    expect(rotated.to[1]).toBe(16);
+    expect(rotated.to[2]).toBe(16);
     expect(rotated.faces.east).toEqual({ uv: [0, 0, 16, 16], texture: '#t' }); // was north
     expect(rotated.faces.west).toEqual({ uv: [16, 0, 0, 16], texture: '#t' }); // was south
     expect(rotated.faces.north).toBeUndefined();
@@ -43,6 +53,40 @@ describe('rotateElementY', () => {
     const roundTrip = rotateElementY(rotateElementY(el, 90), 270);
     expect(roundTrip.from).toEqual(el.from);
     expect(roundTrip.to).toEqual(el.to);
+  });
+
+  it('lands a genuine east face on the real x=16 east boundary after a 90 degree turn (regression guard: 90/270 were once swapped relative to the face-relabeling map)', () => {
+    // A real box's "east" face is x=16 by the model format's own definition — this is true for
+    // ANY box, not a convention this test assumes. FACE_ROTATION_MAP says east->south at 90°, so
+    // after rotating, the box's south boundary (z=16) must be where that face physically ended up
+    // — this exact check caught the previous 90°/270° swap that made every north/south-facing
+    // stair row in village/plains/houses/plains_small_house_3's roof render with its solid riser
+    // facing outward instead of its sloped tread (real oak_stairs.json: facing=south -> y:90).
+    const eastHalfBox: BlockModelElement = {
+      from: [8, 0, 0],
+      to: [16, 16, 16],
+      faces: { east: { uv: [0, 0, 16, 16], texture: '#t' } },
+    };
+    const rotated = rotateElementY(eastHalfBox, 90);
+    expect(rotated.faces.south).toBeDefined();
+    expect(rotated.faces.east).toBeUndefined();
+    expect(rotated.to[2]).toBe(16); // the relabeled "south" face's boundary is genuinely at z=16
+    expect(rotated.from[2]).toBe(8);
+  });
+
+  it('lands a genuine east face on the real x=16 east boundary after a 270 degree turn', () => {
+    // Same invariant as the 90° case above, for the other previously-swapped rotation.
+    // FACE_ROTATION_MAP says east->north at 270°, so the relabeled face must land at z=0.
+    const eastHalfBox: BlockModelElement = {
+      from: [8, 0, 0],
+      to: [16, 16, 16],
+      faces: { east: { uv: [0, 0, 16, 16], texture: '#t' } },
+    };
+    const rotated = rotateElementY(eastHalfBox, 270);
+    expect(rotated.faces.north).toBeDefined();
+    expect(rotated.faces.east).toBeUndefined();
+    expect(rotated.from[2]).toBe(0); // the relabeled "north" face's boundary is genuinely at z=0
+    expect(rotated.to[2]).toBe(8);
   });
 });
 

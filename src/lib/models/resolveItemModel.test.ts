@@ -57,10 +57,16 @@ describe('resolveItemModel', () => {
       },
     });
 
-    // "facing=east" sorts first alphabetically among the available keys -> y: 90 applied.
+    // "facing=east" sorts first alphabetically among the available keys -> y: 90 applied. Real
+    // facing=east ladders mount on the block's WEST wall (confirmed real-game behavior), so this
+    // plane lands near x=0, not x=16.
     const resolved = await resolveItemModel('ladder', blockStateFiles, modelFiles);
-    expect(resolved.model.elements[0].from).toEqual([15.2, 0, 0]);
-    expect(resolved.model.elements[0].to).toEqual([15.2, 16, 16]);
+    expect(resolved.model.elements[0].from[0]).toBeCloseTo(0.8);
+    expect(resolved.model.elements[0].from[1]).toBe(0);
+    expect(resolved.model.elements[0].from[2]).toBe(0);
+    expect(resolved.model.elements[0].to[0]).toBeCloseTo(0.8);
+    expect(resolved.model.elements[0].to[1]).toBe(16);
+    expect(resolved.model.elements[0].to[2]).toBe(16);
     expect(resolved.model.elements[0].faces.east).toBeDefined(); // north relabeled to east by the 90° rotation
     expect(resolved.model.elements[0].faces.north).toBeUndefined();
   });

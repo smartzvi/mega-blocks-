@@ -14,17 +14,28 @@ const FACE_ROTATION_MAP: Record<YRotation, Record<FaceName, FaceName>> = {
 };
 
 /** Rotates a single (x, z) point clockwise (viewed from above) around the block center (8, 8)
- *  by a multiple of 90°. Standard vanilla blockstate "y" rotation convention. */
+ *  by a multiple of 90°. Standard vanilla blockstate "y" rotation convention.
+ *
+ *  The 90°/270° cases must each land a face on the boundary FACE_ROTATION_MAP above says it
+ *  should end up labeled as — e.g. a box's real "east" face (x=16 by the model format's own
+ *  definition) must land at z=16 ("south") after a 90° turn, since that's what the face map
+ *  claims. These two cases were previously swapped relative to that map: real vanilla stairs
+ *  (facing=south -> y:90, facing=north -> y:270, confirmed against the real jar's oak_stairs.json)
+ *  came out with their solid/riser side on the wrong wall specifically for north/south-facing
+ *  rows — east/west rows use y:0/y:180 (unaffected by this pair) and rendered fine, which is
+ *  exactly the "some roof sides slope correctly, others are backwards" symptom a real screenshot
+ *  of village/plains/houses/plains_small_house_3 showed. This affects every facing-rotated
+ *  block using a 90°/270° variant, not just stairs or this one structure. */
 function rotatePointY(x: number, z: number, degrees: YRotation): [number, number] {
   switch (degrees) {
     case 0:
       return [x, z];
     case 90:
-      return [z, 16 - x];
+      return [16 - z, x];
     case 180:
       return [16 - x, 16 - z];
     case 270:
-      return [16 - z, x];
+      return [z, 16 - x];
   }
 }
 
