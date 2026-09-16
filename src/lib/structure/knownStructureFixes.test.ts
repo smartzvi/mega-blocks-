@@ -22,6 +22,27 @@ describe('applyKnownStructureFixes', () => {
     expect(blockIds.has('minecraft:oak_stairs[facing=north,half=bottom,shape=outer_left,waterlogged=false]')).toBe(true);
   });
 
+  it('fills the floor-center jigsaw gap with oak_planks, matching the surrounding floor', () => {
+    const grid = smallGrid();
+    setVoxel(grid, 2, 0, 3, 'minecraft:oak_planks'); // a real neighboring floor cell, for context
+    const blockIds = new Set<string>();
+
+    applyKnownStructureFixes('village/plains/houses/plains_small_house_3', grid, blockIds);
+
+    expect(getVoxel(grid, 3, 0, 3)).toBe('minecraft:oak_planks');
+    expect(blockIds.has('minecraft:oak_planks')).toBe(true);
+  });
+
+  it('removes the stray floor-level stair entirely, leaving air', () => {
+    const grid = smallGrid();
+    setVoxel(grid, 4, 1, 4, 'minecraft:oak_stairs[facing=east,half=bottom,shape=straight,waterlogged=false]');
+    const blockIds = new Set<string>();
+
+    applyKnownStructureFixes('village/plains/houses/plains_small_house_3', grid, blockIds);
+
+    expect(getVoxel(grid, 4, 1, 4)).toBeNull();
+  });
+
   it('is a no-op for any other structure', () => {
     const grid = smallGrid();
     const blockIds = new Set<string>();

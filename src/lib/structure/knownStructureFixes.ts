@@ -5,8 +5,10 @@ import { setVoxel } from '../voxel/voxelGrid';
 interface StructureFix {
   /** Source-grid position, in the structure's own (unscaled) coordinates. */
   pos: readonly [x: number, y: number, z: number];
-  name: string;
-  properties: Record<string, string>;
+  /** The corrected block, or `null` to clear the cell to air entirely (an extraneous block that
+   *  shouldn't be there at all, as opposed to one that's there but wrongly oriented/typed). */
+  name: string | null;
+  properties?: Record<string, string>;
 }
 
 /**
@@ -36,6 +38,22 @@ const KNOWN_FIXES: Record<string, StructureFix[]> = {
       name: 'minecraft:oak_stairs',
       properties: { facing: 'north', half: 'bottom', shape: 'outer_left', waterlogged: 'false' },
     },
+    // Floor layer (y=0), exact center of the 7x7 footprint (3,3): real data has a `minecraft:jigsaw`
+    // here (structure-generation machinery, already treated as air — common.ts's AIR_LIKE_BLOCKS),
+    // but every other cell in this inner floor ring is `oak_planks` — confirmed directly against the
+    // raw NBT, the jigsaw is the ONLY break in an otherwise solid floor pattern. Real world
+    // generation replaces this jigsaw with whatever connects there; voxelized standalone (no
+    // connecting piece ever attaches), it's just a hole in the floor, reported directly by the user
+    // ("in the center floor there is missing one mega block"). The OTHER real jigsaw in this
+    // structure, at the x=0 edge (front path connector), is left alone — that one sits on the
+    // structure's outer boundary, not inside the floor, and isn't the one reported.
+    { pos: [3, 0, 3], name: 'minecraft:oak_planks' },
+    // Open room airspace (y=1), back corner (4,4): a lone `oak_stairs facing=east,shape=straight`
+    // sitting by itself in otherwise-empty floor-level room space, with no wall or elevation change
+    // around it to climb between — confirmed directly against the raw NBT as the only stair
+    // anywhere at this layer, unlike every other real oak_stairs in this structure (all roof/eave
+    // pieces). Reported directly by the user as a stray block to remove alongside the floor fix.
+    { pos: [4, 1, 4], name: null },
   ],
 };
 
@@ -60,7 +78,11 @@ export function applyKnownStructureFixes(structureName: string, grid: VoxelGrid,
   for (const fix of fixes) {
     const [x, y, z] = fix.pos;
     if (x < 0 || x >= grid.sizeX || y < 0 || y >= grid.sizeY || z < 0 || z >= grid.sizeZ) continue;
-    const key = encodeBlockstateKey(fix.name, fix.properties);
+    if (fix.name === null) {
+      setVoxel(grid, x, y, z, null);
+      continue;
+    }
+    const key = encodeBlockstateKey(fix.name, fix.properties ?? {});
     setVoxel(grid, x, y, z, key);
     blockIds.add(key);
   }
