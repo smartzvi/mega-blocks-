@@ -461,4 +461,51 @@ describe('rasterizeItemModel', () => {
     expect(getVoxel(grid, 8, 0, 8)).toBe('minecraft:restricted'); // element 0 (lower), overridden
     expect(getVoxel(grid, 8, 31, 8)).toBe('minecraft:close'); // element 1 (upper), shared palette, unaffected
   });
+
+  it('lets the side texture carry through a suppressed top face on rim voxels, instead of end-capping (same-block seam fix)', () => {
+    // A log-like cube: distinct colors for top/bottom (end-grain) vs the 4 sides (bark) — the
+    // classic case a real oak_log/stripped_log/pillar-family block hits when two identical
+    // instances are stacked (buildStructureVoxelGrid.ts's `suppressedFaces`).
+    const model: BlockModel = {
+      textures: { end: 'end', side: 'side' },
+      elements: [
+        {
+          from: [0, 0, 0],
+          to: [16, 16, 16],
+          faces: {
+            top: { uv: [0, 0, 16, 16], texture: '#end' },
+            bottom: { uv: [0, 0, 16, 16], texture: '#end' },
+            north: { uv: [0, 0, 16, 16], texture: '#side' },
+            south: { uv: [0, 0, 16, 16], texture: '#side' },
+            east: { uv: [0, 0, 16, 16], texture: '#side' },
+            west: { uv: [0, 0, 16, 16], texture: '#side' },
+          },
+        },
+      ],
+    };
+    const endTex = paintedTexture({ e: { rect: [0, 0, 16, 16], rgb: [220, 180, 90] } });
+    const sideTex = paintedTexture({ s: { rect: [0, 0, 16, 16], rgb: [90, 60, 30] } });
+    const palette = [fakePaletteEntry('minecraft:end_color', 220, 180, 90), fakePaletteEntry('minecraft:side_color', 90, 60, 30)];
+    const textures = new Map([
+      ['end', endTex],
+      ['side', sideTex],
+    ]);
+
+    const plain = rasterizeItemModel(model, textures, palette, 8);
+    // Without suppression: a rim voxel on the top edge (exposed both up and to a side) renders
+    // end-grain — top wins over the side at edges, the existing/correct behavior for a lone block.
+    expect(getVoxel(plain, 0, 7, 4)).toBe('minecraft:end_color');
+    // The true top-center voxel (no side exposure) also renders end-grain, as expected.
+    expect(getVoxel(plain, 4, 7, 4)).toBe('minecraft:end_color');
+
+    const suppressed = rasterizeItemModel(model, textures, palette, 8, 16, 16, undefined, new Set(['top']));
+    // With "top" suppressed: the same rim voxel now falls through to its still-exposed side face.
+    expect(getVoxel(suppressed, 0, 7, 4)).toBe('minecraft:side_color');
+    // The true top-center voxel has no other exposed face to fall back to — it becomes air, which
+    // is correct once composited: the real neighboring stamp's own solid surface sits immediately
+    // across that boundary either way.
+    expect(getVoxel(suppressed, 4, 7, 4)).toBeNull();
+    // A voxel on the bottom (never suppressed here) is completely unaffected.
+    expect(getVoxel(suppressed, 4, 0, 4)).toBe('minecraft:end_color');
+  });
 });

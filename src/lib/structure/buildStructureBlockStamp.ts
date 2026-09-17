@@ -1,4 +1,4 @@
-import type { FaceTexture, PaletteEntry, VoxelGrid } from '../../types/minecraft';
+import type { FaceName, FaceTexture, PaletteEntry, VoxelGrid } from '../../types/minecraft';
 import { averageColorHsv, averageColorLab } from '../color/averageColor';
 import { matchPixel } from '../matching/matchFace';
 import { buildItemVoxelGrid, type TextureDecoder } from '../models/buildItemVoxelGrid';
@@ -67,6 +67,10 @@ function solidStamp(blockId: string, resolution: number): VoxelGrid {
  * - Any other failure (no blockstate/model found at all, no texture decodable): the same
  *   `resolveFallbackTextureKey` chain buildStructurePalette.ts used to use, now feeding a single
  *   representative color into the real matcher instead of just being displayed directly.
+ *
+ * `suppressedFaces`, when given, is passed straight through to rasterizeItemModel (see its own
+ * doc) — only meaningful on the real-engine path above; the flat-color fallback below fills every
+ * cell with the same single color regardless of face, so suppression would be a no-op there.
  */
 export async function buildStructureBlockStamp(
   blockId: string,
@@ -74,7 +78,8 @@ export async function buildStructureBlockStamp(
   modelFiles: FileLoaderMap,
   decodeTexture: TextureDecoder,
   palette: PaletteEntry[],
-  resolution: number
+  resolution: number,
+  suppressedFaces?: ReadonlySet<FaceName>
 ): Promise<VoxelGrid> {
   if (palette.length === 0) {
     throw new Error('Palette is empty — cannot voxelize structure blocks.');
@@ -87,6 +92,7 @@ export async function buildStructureBlockStamp(
     return await buildItemVoxelGrid(bareName, blockStateFiles, modelFiles, decodeTexture, palette, resolution, {
       rejectMultiCell: true,
       properties: Object.keys(properties).length > 0 ? properties : undefined,
+      suppressedFaces,
     });
   } catch {
     // Falls through to the flat-color fallback below for every failure mode — a MultiCellError

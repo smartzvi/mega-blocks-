@@ -125,6 +125,124 @@ describe('buildStructureVoxelGrid', () => {
     expect(getVoxel(result, 31, 5, 5)).toBe('minecraft:blue_color');
   });
 
+  it('lets the side texture carry through the seam between two vertically stacked identical logs, instead of end-capping (same-block adjacency fix)', async () => {
+    // A log-like block: distinct "end" (top/bottom, end-grain) vs "side" (bark) textures, real
+    // blockstate/model files (not the flat-fallback path) so real per-face color resolution runs.
+    const blockStateFiles = new Map([
+      ['fake_log', async () => new TextEncoder().encode(JSON.stringify({ variants: { 'axis=y': { model: 'minecraft:block/fake_log' } } }))],
+    ]);
+    const modelFiles = new Map([
+      [
+        'fake_log',
+        async () =>
+          new TextEncoder().encode(
+            JSON.stringify({
+              textures: { end: 'minecraft:block/fake_log_end', side: 'minecraft:block/fake_log_side' },
+              elements: [
+                {
+                  from: [0, 0, 0],
+                  to: [16, 16, 16],
+                  faces: {
+                    up: { uv: [0, 0, 16, 16], texture: '#end' },
+                    down: { uv: [0, 0, 16, 16], texture: '#end' },
+                    north: { uv: [0, 0, 16, 16], texture: '#side' },
+                    south: { uv: [0, 0, 16, 16], texture: '#side' },
+                    east: { uv: [0, 0, 16, 16], texture: '#side' },
+                    west: { uv: [0, 0, 16, 16], texture: '#side' },
+                  },
+                },
+              ],
+            })
+          ),
+      ],
+    ]);
+    const endTexture = solidTexture(220, 180, 90);
+    const sideTexture = solidTexture(90, 60, 30);
+    const decodeTexture = async (key: string) => {
+      if (key === 'fake_log_end') return endTexture;
+      if (key === 'fake_log_side') return sideTexture;
+      return null;
+    };
+    const palette = [fakePaletteEntry('minecraft:end_color', 220, 180, 90), fakePaletteEntry('minecraft:side_color', 90, 60, 30)];
+
+    const culled = createVoxelGrid(1, 2, 1);
+    setVoxel(culled, 0, 0, 0, 'minecraft:fake_log[axis=y]');
+    setVoxel(culled, 0, 1, 0, 'minecraft:fake_log[axis=y]');
+
+    const result = await buildStructureVoxelGrid(culled, new Set(['minecraft:fake_log[axis=y]']), palette, decodeTexture, blockStateFiles, modelFiles, 8);
+
+    expect(result.sizeY).toBe(16); // 2 source cells * resolution 8
+    // The real bottom (world y=0, no neighbor below) and real top (world y=15, no neighbor above)
+    // keep their genuine end-grain cap — this is an isolated exposed end in both cases.
+    expect(getVoxel(result, 0, 0, 4)).toBe('minecraft:end_color');
+    expect(getVoxel(result, 0, 15, 4)).toBe('minecraft:end_color');
+    // The internal seam (world y=7, top rim of the lower cell; world y=8, bottom rim of the upper
+    // cell) is where two real occurrences of the identical block meet — both sides must now show
+    // the continuous side (bark) color instead of end-capping.
+    expect(getVoxel(result, 0, 7, 4)).toBe('minecraft:side_color');
+    expect(getVoxel(result, 0, 8, 4)).toBe('minecraft:side_color');
+  });
+
+  it('never applies the same-block seam fix to stairs, even when two identical stair cells are adjacent', async () => {
+    // Same log-like end/side texture setup as above, but named as a "stairs" block — proves the
+    // exclusion is unconditional (keyed on the block name, not on shape), per explicit instruction
+    // not to touch stair rendering while fixing this unrelated seam.
+    const blockStateFiles = new Map([
+      ['fake_stairs', async () => new TextEncoder().encode(JSON.stringify({ variants: { 'shape=straight': { model: 'minecraft:block/fake_stairs' } } }))],
+    ]);
+    const modelFiles = new Map([
+      [
+        'fake_stairs',
+        async () =>
+          new TextEncoder().encode(
+            JSON.stringify({
+              textures: { end: 'minecraft:block/fake_log_end', side: 'minecraft:block/fake_log_side' },
+              elements: [
+                {
+                  from: [0, 0, 0],
+                  to: [16, 16, 16],
+                  faces: {
+                    up: { uv: [0, 0, 16, 16], texture: '#end' },
+                    down: { uv: [0, 0, 16, 16], texture: '#end' },
+                    north: { uv: [0, 0, 16, 16], texture: '#side' },
+                    south: { uv: [0, 0, 16, 16], texture: '#side' },
+                    east: { uv: [0, 0, 16, 16], texture: '#side' },
+                    west: { uv: [0, 0, 16, 16], texture: '#side' },
+                  },
+                },
+              ],
+            })
+          ),
+      ],
+    ]);
+    const endTexture = solidTexture(220, 180, 90);
+    const sideTexture = solidTexture(90, 60, 30);
+    const decodeTexture = async (key: string) => {
+      if (key === 'fake_log_end') return endTexture;
+      if (key === 'fake_log_side') return sideTexture;
+      return null;
+    };
+    const palette = [fakePaletteEntry('minecraft:end_color', 220, 180, 90), fakePaletteEntry('minecraft:side_color', 90, 60, 30)];
+
+    const culled = createVoxelGrid(1, 2, 1);
+    setVoxel(culled, 0, 0, 0, 'minecraft:fake_stairs[shape=straight]');
+    setVoxel(culled, 0, 1, 0, 'minecraft:fake_stairs[shape=straight]');
+
+    const result = await buildStructureVoxelGrid(
+      culled,
+      new Set(['minecraft:fake_stairs[shape=straight]']),
+      palette,
+      decodeTexture,
+      blockStateFiles,
+      modelFiles,
+      8
+    );
+
+    // Unlike the log case, the internal seam still end-caps on both sides — stairs are excluded.
+    expect(getVoxel(result, 0, 7, 4)).toBe('minecraft:end_color');
+    expect(getVoxel(result, 0, 8, 4)).toBe('minecraft:end_color');
+  });
+
   it('rejects a composition whose real solid-voxel count exceeds the safety cap, before allocating the composed grid', async () => {
     // An 8x8x8 block of single-cell beds (each cell's stamp is a full resolution^3 solid cube via
     // the flat-fallback path) at resolution 64 needs 8*8*8*64^3 = 134,217,728 real solid voxels —

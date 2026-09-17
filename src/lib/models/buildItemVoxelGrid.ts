@@ -1,4 +1,4 @@
-import type { FaceTexture, PaletteEntry, VoxelGrid } from '../../types/minecraft';
+import type { FaceName, FaceTexture, PaletteEntry, VoxelGrid } from '../../types/minecraft';
 import { resolveItemModel } from './resolveItemModel';
 import { rasterizeItemModel } from './rasterizeModel';
 import { resolveTexturePath, texturePathToKey } from './resolveTextureVariable';
@@ -84,7 +84,7 @@ export async function buildItemVoxelGrid(
   decodeTexture: TextureDecoder,
   palette: PaletteEntry[],
   resolution: number,
-  options?: { rejectMultiCell?: boolean; properties?: Record<string, string> }
+  options?: { rejectMultiCell?: boolean; properties?: Record<string, string>; suppressedFaces?: ReadonlySet<FaceName> }
 ): Promise<VoxelGrid> {
   const handAuthored = HAND_AUTHORED_TEMPLATES[itemName];
   const { model, heightUnits, depthUnits } =
@@ -146,5 +146,14 @@ export async function buildItemVoxelGrid(
     );
   }
 
-  return rasterizeItemModel(model, textures, effectivePalette, resolution, heightUnits, depthUnits, elementPaletteOverrides);
+  return rasterizeItemModel(
+    model,
+    textures,
+    effectivePalette,
+    resolution,
+    heightUnits,
+    depthUnits,
+    elementPaletteOverrides,
+    options?.suppressedFaces
+  );
 }

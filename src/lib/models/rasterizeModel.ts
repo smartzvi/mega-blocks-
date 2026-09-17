@@ -104,6 +104,18 @@ function resolveFaceColor(
  * element (handAuthoredTemplates.ts) is restricted to light-emitting blocks only, so it reads as
  * genuinely glowing rather than picking whatever wood/wool tone happens to be closest in color.
  * Elements with no entry in the map keep using the shared `palette`, unaffected.
+ *
+ * `suppressedFaces`, when given (structure mode, buildStructureVoxelGrid.ts — see its own doc),
+ * names world-direction faces this stamp should never let win an edge voxel's color, because the
+ * real structure has another occurrence of this exact same block continuing in that direction.
+ * Without this, a voxel sitting on both an exposed side AND an exposed top/bottom (a log's own
+ * top/bottom rim) always renders using top/bottom's end-grain texture — correct for a lone block,
+ * but wrong at the shared boundary between two stacked identical logs, where that boundary is
+ * genuinely interior in real Minecraft and should show the continuous bark texture instead. A rim
+ * voxel with a suppressed face still has its other exposed face(s) to fall back to; a voxel with
+ * ONLY the suppressed face exposed (dead center of that face, no side exposure) becomes air here —
+ * correct, since the real neighboring stamp's own solid surface occupies the position immediately
+ * across that boundary either way.
  */
 export function rasterizeItemModel(
   model: BlockModel,
@@ -112,7 +124,8 @@ export function rasterizeItemModel(
   resolution: number,
   modelHeightUnits = MODEL_SPACE_SIZE,
   modelDepthUnits = MODEL_SPACE_SIZE,
-  elementPaletteOverrides?: Map<number, PaletteEntry[]>
+  elementPaletteOverrides?: Map<number, PaletteEntry[]>,
+  suppressedFaces?: ReadonlySet<FaceName>
 ): VoxelGrid {
   const scale = resolution / MODEL_SPACE_SIZE;
   const resolutionY = Math.round(resolution * (modelHeightUnits / MODEL_SPACE_SIZE));
@@ -154,9 +167,9 @@ export function rasterizeItemModel(
 
     const exposedFaces = FACE_PRIORITY.filter((face) => {
       const [dx, dy, dz] = NEIGHBOR_OFFSET[face];
-      return !isSolid(x + dx, y + dy, z + dz);
+      return !isSolid(x + dx, y + dy, z + dz) && !suppressedFaces?.has(face);
     });
-    if (exposedFaces.length === 0) return null; // fully interior
+    if (exposedFaces.length === 0) return null; // fully interior, or only exposed via a suppressed face
 
     const cx = (x + 0.5) / scale;
     const cy = (y + 0.5) / scale;
