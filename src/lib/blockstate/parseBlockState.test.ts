@@ -151,6 +151,126 @@ describe('resolveBlockStateModelRefs', () => {
   });
 });
 
+// Trimmed but structurally exact slices of real 1.21.11 blockstates (dumped from the jar).
+const OAK_FENCE = {
+  multipart: [
+    { apply: { model: 'minecraft:block/oak_fence_post' } },
+    { apply: { model: 'minecraft:block/oak_fence_side', uvlock: true }, when: { north: 'true' } },
+    { apply: { model: 'minecraft:block/oak_fence_side', uvlock: true, y: 90 }, when: { east: 'true' } },
+    { apply: { model: 'minecraft:block/oak_fence_side', uvlock: true, y: 180 }, when: { south: 'true' } },
+    { apply: { model: 'minecraft:block/oak_fence_side', uvlock: true, y: 270 }, when: { west: 'true' } },
+  ],
+};
+
+const COBBLESTONE_WALL = {
+  multipart: [
+    { apply: { model: 'minecraft:block/cobblestone_wall_post' }, when: { up: 'true' } },
+    { apply: { model: 'minecraft:block/cobblestone_wall_side' }, when: { north: 'low' } },
+    { apply: { model: 'minecraft:block/cobblestone_wall_side', y: 90 }, when: { east: 'low' } },
+    { apply: { model: 'minecraft:block/cobblestone_wall_side_tall' }, when: { north: 'tall' } },
+    { apply: { model: 'minecraft:block/cobblestone_wall_side_tall', y: 90 }, when: { east: 'tall' } },
+  ],
+};
+
+const IRON_BARS = {
+  multipart: [
+    { apply: { model: 'minecraft:block/iron_bars_post_ends' } },
+    { apply: { model: 'minecraft:block/iron_bars_post' }, when: { east: 'false', north: 'false', south: 'false', west: 'false' } },
+    { apply: { model: 'minecraft:block/iron_bars_cap' }, when: { east: 'false', north: 'true', south: 'false', west: 'false' } },
+    { apply: { model: 'minecraft:block/iron_bars_side' }, when: { north: 'true' } },
+    { apply: { model: 'minecraft:block/iron_bars_side', y: 90 }, when: { east: 'true' } },
+  ],
+};
+
+describe('resolveBlockStateModelRefs — multipart `when` evaluated against real properties', () => {
+  it('a fence with real north=true,east=true renders its post plus exactly those two arms', () => {
+    const refs = resolveBlockStateModelRefs(OAK_FENCE, 'oak_fence', { north: 'true', east: 'true', south: 'false', west: 'false', waterlogged: 'false' });
+    expect(refs).toEqual([
+      { model: 'minecraft:block/oak_fence_post', x: 0, y: 0 },
+      { model: 'minecraft:block/oak_fence_side', x: 0, y: 0 },
+      { model: 'minecraft:block/oak_fence_side', x: 0, y: 90 },
+    ]);
+  });
+
+  it('a fence with all sides false renders just the post', () => {
+    const refs = resolveBlockStateModelRefs(OAK_FENCE, 'oak_fence', { north: 'false', east: 'false', south: 'false', west: 'false' });
+    expect(refs).toEqual([{ model: 'minecraft:block/oak_fence_post', x: 0, y: 0 }]);
+  });
+
+  it('a wall with a real post and mixed low/tall arms picks each arm\'s own model', () => {
+    const refs = resolveBlockStateModelRefs(COBBLESTONE_WALL, 'cobblestone_wall', { up: 'true', north: 'low', east: 'tall', south: 'none', west: 'none' });
+    expect(refs).toEqual([
+      { model: 'minecraft:block/cobblestone_wall_post', x: 0, y: 0 },
+      { model: 'minecraft:block/cobblestone_wall_side', x: 0, y: 0 },
+      { model: 'minecraft:block/cobblestone_wall_side_tall', x: 0, y: 90 },
+    ]);
+  });
+
+  it('a wall with up=false drops the post — no longer the maximally-connected fallback', () => {
+    const refs = resolveBlockStateModelRefs(COBBLESTONE_WALL, 'cobblestone_wall', { up: 'false', north: 'low', east: 'none' });
+    expect(refs).toEqual([{ model: 'minecraft:block/cobblestone_wall_side', x: 0, y: 0 }]);
+  });
+
+  it('iron bars with a single north connection pick the cap and the side, not the bare post', () => {
+    const refs = resolveBlockStateModelRefs(IRON_BARS, 'iron_bars', { north: 'true', east: 'false', south: 'false', west: 'false' });
+    expect(refs.map((r) => r.model)).toEqual([
+      'minecraft:block/iron_bars_post_ends',
+      'minecraft:block/iron_bars_cap',
+      'minecraft:block/iron_bars_side',
+    ]);
+  });
+
+  it('supports "a|b" alternatives, OR and AND conditions', () => {
+    const state = {
+      multipart: [
+        { apply: { model: 'minecraft:block/alt' }, when: { north: 'low|tall' } },
+        { apply: { model: 'minecraft:block/or' }, when: { OR: [{ east: 'true' }, { west: 'true' }] } },
+        { apply: { model: 'minecraft:block/and' }, when: { AND: [{ up: 'true' }, { south: 'true' }] } },
+      ],
+    };
+    expect(resolveBlockStateModelRefs(state, 'x', { north: 'tall', west: 'true', up: 'true', south: 'false' }).map((r) => r.model)).toEqual([
+      'minecraft:block/alt',
+      'minecraft:block/or',
+    ]);
+    expect(resolveBlockStateModelRefs(state, 'x', { north: 'none', east: 'false', west: 'false', up: 'true', south: 'true' }).map((r) => r.model)).toEqual([
+      'minecraft:block/and',
+    ]);
+  });
+
+  it('treats a property the block does not carry as non-matching, even for a "false" condition', () => {
+    const refs = resolveBlockStateModelRefs(IRON_BARS, 'iron_bars', { north: 'true' }); // east/south/west unknown
+    expect(refs.map((r) => r.model)).toEqual(['minecraft:block/iron_bars_post_ends', 'minecraft:block/iron_bars_side']);
+  });
+
+  it('falls back to the property-less default when properties satisfy no part at all', () => {
+    const refs = resolveBlockStateModelRefs(COBBLESTONE_WALL, 'cobblestone_wall', { up: 'false', north: 'none', east: 'none' });
+    expect(refs).toHaveLength(COBBLESTONE_WALL.multipart.length); // all-conditional -> every part, unchanged behavior
+  });
+
+  it('a connected glass pane drops its center post (it shows through the transparent glass as a stray bar), but an isolated pane keeps it', () => {
+    const pane = {
+      multipart: [
+        { apply: { model: 'minecraft:block/glass_pane_post' } },
+        { apply: { model: 'minecraft:block/glass_pane_side' }, when: { north: 'true' } },
+        { apply: { model: 'minecraft:block/glass_pane_side_alt' }, when: { south: 'true' } },
+        { apply: { model: 'minecraft:block/glass_pane_noside' }, when: { east: 'false' } },
+      ],
+    };
+    const connected = resolveBlockStateModelRefs(pane, 'glass_pane', { north: 'true', south: 'true', east: 'false', west: 'false' });
+    expect(connected.map((r) => r.model)).toEqual(['minecraft:block/glass_pane_side', 'minecraft:block/glass_pane_side_alt', 'minecraft:block/glass_pane_noside']);
+
+    const isolated = resolveBlockStateModelRefs(pane, 'glass_pane', { north: 'false', south: 'false', east: 'false', west: 'false' });
+    expect(isolated.map((r) => r.model)).toContain('minecraft:block/glass_pane_post');
+
+    const iron = resolveBlockStateModelRefs(IRON_BARS, 'iron_bars', { north: 'true', east: 'false', south: 'false', west: 'false' });
+    expect(iron.map((r) => r.model)).toContain('minecraft:block/iron_bars_post_ends');
+  });
+
+  it('without properties (item mode), behavior is unchanged: fence stays a bare post', () => {
+    expect(resolveBlockStateModelRefs(OAK_FENCE, 'oak_fence')).toEqual([{ model: 'minecraft:block/oak_fence_post', x: 0, y: 0 }]);
+  });
+});
+
 describe('findTwoPartVariantKeys', () => {
   it('finds the matching lower/upper pair, preferring facing=north, like real oak_door.json', () => {
     const result = findTwoPartVariantKeys(OAK_DOOR_LIKE_BLOCKSTATE);

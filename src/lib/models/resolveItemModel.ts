@@ -28,6 +28,29 @@ async function loadRawBlockState(name: string, blockStateFiles: FileLoaderMap): 
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+/** Iron/copper bars' part models (`*_bars_side`, `*_bars_side_alt`, ...). */
+const BARS_PART_MODEL = /bars_(?:post|side|cap)/;
+
+/**
+ * Vanilla's bars models draw each arm as a flat, see-through pane (the `bars` texture is mostly
+ * transparent) plus a decorative "edge cap" specified as a full box that defines only one to three
+ * of its faces — e.g. `[7,0,0]->[9,16,7]` with just a `north` face. Vanilla renders only the
+ * faces a box defines, so that's a single flat quad; this engine fills a box's whole volume and,
+ * finding no defined face on the sides that end up exposed, borrows colour from the one face it
+ * has (the texture's opaque center column). The result was a solid 2x16x7 slab that hid every gap
+ * in the real pane. Dropping those partial volumetric boxes for bars leaves the real pane and rim
+ * decals, so the bars read as thin bars with open air between them.
+ *
+ * Deliberately limited to bars models: other blocks (cactus, cauldron water, nether portal, glass
+ * panes...) also contain partial boxes, but their current look depends on the fill behaviour.
+ */
+export function dropBarsCapBoxes(elements: BlockModelElement[]): BlockModelElement[] {
+  return elements.filter((el) => {
+    const isVolumetric = el.to.every((v, i) => Math.abs(v - el.from[i]) > 0.01);
+    return !(isVolumetric && Object.keys(el.faces).length < 6);
+  });
+}
+
 /** Vanilla applies a variant's "x" rotation before its "y" rotation when both are present (real
  *  case: a `half=top` stair combines `x: 180` with a facing-driven `y`) — matching that order here
  *  matters, since rotating a non-cube element around Y first then X (or the reverse) generally
@@ -35,7 +58,8 @@ async function loadRawBlockState(name: string, blockStateFiles: FileLoaderMap): 
 async function resolveSingleRef(ref: BlockStateModelRef, modelFiles: FileLoaderMap): Promise<BlockModel> {
   const modelKey = texturePathToKey(ref.model);
   const model = await resolveModelFile(modelKey, modelFiles);
-  const elements = model.elements.map((el) => rotateElementY(rotateElementX(el, ref.x), ref.y));
+  const source = BARS_PART_MODEL.test(ref.model) ? dropBarsCapBoxes(model.elements) : model.elements;
+  const elements = source.map((el) => rotateElementY(rotateElementX(el, ref.x), ref.y));
   return { elements, textures: model.textures };
 }
 

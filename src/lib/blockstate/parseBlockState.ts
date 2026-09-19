@@ -74,6 +74,30 @@ function pickVariantKeyForProperties(variants: Record<string, RawApplyValue>, pr
   return matches[0];
 }
 
+/** Whether a value in a multipart `when` clause matches a real property value. Vanilla writes
+ *  alternatives as "a|b" (e.g. a wall's `"north": "low|tall"`), and JSON files occasionally use a
+ *  bare boolean/number instead of a string, so both sides are compared as strings. */
+function whenValueMatches(expected: unknown, actual: string | undefined): boolean {
+  if (actual === undefined) return false;
+  return String(expected).split('|').includes(actual);
+}
+
+/**
+ * Evaluates a real multipart `when` condition (the same grammar Minecraft's own blockstate
+ * loader uses) against a block's known properties: a plain object means every listed property
+ * must match (AND); `{ "OR": [...] }` / `{ "AND": [...] }` combine nested conditions. A property
+ * the block doesn't carry never matches — including a `"false"` condition, since an unknown value
+ * isn't evidence it's false — so a block with incomplete stored properties degrades toward "fewer
+ * parts" (the pre-existing isolated look), never toward guessing extra ones.
+ */
+function whenMatches(when: unknown, properties: Record<string, string>): boolean {
+  if (typeof when !== 'object' || when === null) return false;
+  const clause = when as Record<string, unknown>;
+  if (Array.isArray(clause.OR)) return clause.OR.some((sub) => whenMatches(sub, properties));
+  if (Array.isArray(clause.AND)) return clause.AND.every((sub) => whenMatches(sub, properties));
+  return Object.entries(clause).every(([key, expected]) => whenValueMatches(expected, properties[key]));
+}
+
 /**
  * Resolves a blockstate JSON (assets/minecraft/blockstates/<name>.json) into the model
  * reference(s) to voxelize. "variants" blocks (facing/powered/delay/... combinations) pick one
@@ -91,6 +115,12 @@ function pickVariantKeyForProperties(variants: Record<string, RawApplyValue>, pr
  * a stair rotate to its real facing/shape and a door half render with its real hinge/open state.
  * Falls back to the property-less default pick if nothing matches (property-less item mode calls,
  * or a block whose stored properties don't cover what a variant key expects).
+ *
+ * For a multipart block, `properties` likewise evaluates every part's real `when` condition, so a
+ * fence stored with `north=true,east=true` renders its post plus exactly those two arms (and a
+ * wall its real post + low/tall arms) instead of always collapsing to the bare post. If no part at
+ * all matches (nothing unconditional, and stored properties that satisfy no condition), the
+ * property-less default above applies instead of returning an empty model.
  */
 export function resolveBlockStateModelRefs(json: unknown, blockName: string, properties?: Record<string, string>): BlockStateModelRef[] {
   if (typeof json !== 'object' || json === null) {
@@ -105,8 +135,15 @@ export function resolveBlockStateModelRefs(json: unknown, blockName: string, pro
   }
 
   if (raw.multipart && raw.multipart.length > 0) {
+    let matched = properties ? raw.multipart.filter((part) => part.when === undefined || whenMatches(part.when, properties)) : [];
+    // A pane's glass texture is transparent in the middle, so its always-on center post shows
+    // through a connected pane as a stray vertical bar — dropped whenever the pane has at least one
+    // real arm. An isolated pane (no arms) keeps its post, since it's the only geometry there.
+    if (/glass_pane$/.test(blockName) && matched.some((part) => firstApply(part.apply).model.includes('_pane_side'))) {
+      matched = matched.filter((part) => !firstApply(part.apply).model.endsWith('_pane_post'));
+    }
     const unconditional = raw.multipart.filter((part) => part.when === undefined);
-    const parts = unconditional.length > 0 ? unconditional : raw.multipart;
+    const parts = matched.length > 0 ? matched : unconditional.length > 0 ? unconditional : raw.multipart;
     return parts.map((part) => {
       const apply = firstApply(part.apply);
       return { model: apply.model, x: normalizeRotation(apply.x), y: normalizeRotation(apply.y) };

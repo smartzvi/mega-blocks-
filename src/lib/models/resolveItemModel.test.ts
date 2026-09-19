@@ -9,6 +9,47 @@ function fakeFiles(files: Record<string, unknown>) {
   return map;
 }
 
+describe('resolveItemModel — iron bars', () => {
+  // Structure of the real template_bars_side.json: a flat pane, a volumetric one-face "edge cap"
+  // box, and flat top/bottom rims.
+  const barsFiles = () => ({
+    blockStates: fakeFiles({
+      iron_bars: { multipart: [{ apply: { model: 'minecraft:block/iron_bars_post_ends' } }, { when: { north: 'true' }, apply: { model: 'minecraft:block/iron_bars_side' } }] },
+    }),
+    models: fakeFiles({
+      iron_bars_post_ends: {
+        textures: { bars: 'minecraft:block/iron_bars' },
+        elements: [{ from: [7, 0.001, 7], to: [9, 0.001, 9], faces: { up: { uv: [7, 7, 9, 9], texture: '#bars' } } }],
+      },
+      iron_bars_side: {
+        textures: { bars: 'minecraft:block/iron_bars' },
+        elements: [
+          { from: [8, 0, 0], to: [8, 16, 8], faces: { west: { uv: [16, 0, 8, 16], texture: '#bars' }, east: { uv: [8, 0, 16, 16], texture: '#bars' } } },
+          { from: [7, 0, 0], to: [9, 16, 7], faces: { north: { uv: [7, 0, 9, 16], texture: '#bars' } } },
+          { from: [7, 0.001, 0], to: [9, 0.001, 7], faces: { up: { uv: [7, 0, 9, 7], texture: '#bars' } } },
+        ],
+      },
+    }),
+  });
+
+  it('drops the one-face volumetric edge-cap box but keeps the flat pane and rim decals, so the bars stay see-through', async () => {
+    const { blockStates, models } = barsFiles();
+    const resolved = await resolveItemModel('iron_bars', blockStates, models, { north: 'true' });
+    const boxes = resolved.model.elements.filter((el) => el.to.every((v, i) => Math.abs(v - el.from[i]) > 0.01));
+    expect(boxes).toHaveLength(0); // no solid volumes left
+    expect(resolved.model.elements).toHaveLength(3); // post rim + pane + side rim
+  });
+
+  it('leaves non-bars models with partial volumetric boxes untouched', async () => {
+    const blockStates = fakeFiles({ cactus_like: { variants: { '': { model: 'minecraft:block/cactus_like' } } } });
+    const models = fakeFiles({
+      cactus_like: { textures: { t: 'minecraft:block/cactus_side' }, elements: [{ from: [1, 0, 1], to: [15, 16, 15], faces: { up: { uv: [0, 0, 16, 16], texture: '#t' } } }] },
+    });
+    const resolved = await resolveItemModel('cactus_like', blockStates, models);
+    expect(resolved.model.elements).toHaveLength(1);
+  });
+});
+
 describe('resolveItemModel', () => {
   it('resolves oak_fence end-to-end: multipart -> unconditional post -> parent chain -> merged texture', async () => {
     const blockStateFiles = fakeFiles({
