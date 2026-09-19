@@ -1,5 +1,5 @@
 import type { BlockModel } from '../../types/item';
-import { HAND_AUTHORED_TEMPLATES } from '../models/handAuthoredTemplates';
+import { resolveHandAuthoredTemplate } from '../models/handAuthoredTemplates';
 import { resolveItemModel } from '../models/resolveItemModel';
 import { resolveTexturePath, texturePathToKey } from '../models/resolveTextureVariable';
 import { decodeBlockstateKey } from './blockstateKey';
@@ -45,7 +45,7 @@ export async function resolveFallbackTextureKey(blockName: string, blockStateFil
   const { name, properties } = decodeBlockstateKey(blockName);
   const bareName = name.startsWith('minecraft:') ? name.slice('minecraft:'.length) : name;
 
-  const template = HAND_AUTHORED_TEMPLATES[bareName];
+  const template = resolveHandAuthoredTemplate(bareName, properties);
   if (template) {
     const key = firstTextureKey(template.model);
     if (key) return key;

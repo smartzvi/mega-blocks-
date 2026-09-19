@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { HAND_AUTHORED_TEMPLATES } from './handAuthoredTemplates';
+import { HAND_AUTHORED_TEMPLATES, resolveHandAuthoredTemplate } from './handAuthoredTemplates';
 
 describe('HAND_AUTHORED_TEMPLATES', () => {
-  it('includes chest, trapped_chest, ender_chest with distinct texture keys but identical geometry', () => {
-    const chest = HAND_AUTHORED_TEMPLATES.chest;
-    const trapped = HAND_AUTHORED_TEMPLATES.trapped_chest;
-    const ender = HAND_AUTHORED_TEMPLATES.ender_chest;
+  it('includes chest, trapped_chest, ender_chest with distinct texture keys and distinct fill/knob colors, but identical geometry and seam color, when no real properties are given (item mode default)', () => {
+    const chest = resolveHandAuthoredTemplate('chest')!;
+    const trapped = resolveHandAuthoredTemplate('trapped_chest')!;
+    const ender = resolveHandAuthoredTemplate('ender_chest')!;
     expect(chest.model.textures.main).toBe('chest/normal');
     expect(trapped.model.textures.main).toBe('chest/trapped');
     expect(ender.model.textures.main).toBe('chest/ender');
@@ -13,10 +13,25 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
     expect(chest.model.elements.map((e) => [e.from, e.to])).toEqual(ender.model.elements.map((e) => [e.from, e.to]));
     expect(chest.heightUnits).toBe(16);
     expect(chest.depthUnits).toBe(16);
+
+    // The seam (element 2) is the same dark tone for all three...
+    expect(chest.elementPaletteRestrictions?.[2]).toEqual(['minecraft:gray_terracotta']);
+    expect(ender.elementPaletteRestrictions?.[2]).toEqual(chest.elementPaletteRestrictions?.[2]);
+    // ...but the fill (0, 1) and knob/latch (last) differ: real oak planks for chest/trapped_chest,
+    // black concrete + gold accent for the black/purple-themed ender chest (real `obsidian` isn't
+    // in this app's curated palette at all — confirmed directly — so it would silently fall back
+    // to the unrestricted match instead of actually restricting anything).
+    expect(chest.elementPaletteRestrictions?.[0]).toEqual(['minecraft:oak_planks']);
+    expect(chest.elementPaletteRestrictions?.[1]).toEqual(['minecraft:oak_planks']);
+    expect(trapped.elementPaletteRestrictions?.[0]).toEqual(['minecraft:oak_planks']);
+    expect(ender.elementPaletteRestrictions?.[0]).toEqual(['minecraft:black_concrete']);
+    const lastIndex = chest.model.elements.length - 1;
+    expect(chest.elementPaletteRestrictions?.[lastIndex]).toEqual(['minecraft:light_gray_concrete']);
+    expect(ender.elementPaletteRestrictions?.[lastIndex]).toEqual(['minecraft:yellow_terracotta']);
   });
 
-  it('chest has exactly 4 elements (base + lid + lock/knob + notch cover), all within 0-16 bounds and the base/lid non-overlapping in y — regression test for real user feedback that the closed chest needs the lock as its own protruding piece, not just a flat painted rectangle', () => {
-    const { elements } = HAND_AUTHORED_TEMPLATES.chest.model;
+  it('chest has exactly 4 elements (base fill + lid fill + seam + latch), all within 0-16 bounds, the base/lid fills non-overlapping in Y, and the latch straddling their real seam — regression test matching real vanilla\'s actual look (plain plank fill, thin seam, small latch, no decorative frame)', () => {
+    const { elements } = resolveHandAuthoredTemplate('chest')!.model;
     expect(elements).toHaveLength(4);
     for (const el of elements) {
       for (const v of [...el.from, ...el.to]) {
@@ -24,75 +39,59 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
         expect(v).toBeLessThanOrEqual(16);
       }
     }
-    const [base, lid, knob] = elements;
-    expect(base.to[1]).toBeLessThanOrEqual(lid.from[1]); // base sits below the lid
-    // The knob protrudes in front of the base/lid's own front face and straddles their real seam.
-    expect(knob.from[2]).toBeLessThan(base.from[2]);
-    expect(knob.from[1]).toBeLessThan(lid.from[1]);
-    expect(knob.to[1]).toBeGreaterThan(base.to[1]);
+    const [baseFill, lidFill, seam, latch] = elements;
+    expect(baseFill.to[1]).toBeLessThanOrEqual(lidFill.from[1]); // base fill sits below the lid fill
+
+    // The seam straddles Y=9, the real base/lid boundary.
+    expect(seam.from[1]).toBeLessThan(9);
+    expect(seam.to[1]).toBeGreaterThan(9);
+
+    // The latch protrudes in front of the base/lid's own front face and straddles their real seam.
+    expect(latch.from[2]).toBeLessThan(baseFill.from[2]);
+    expect(latch.from[1]).toBeLessThan(lidFill.from[1]);
+    expect(latch.to[1]).toBeGreaterThan(baseFill.to[1]);
   });
 
-  it('chest\'s lock/knob is restricted to a neutral gray metal palette, but ender_chest\'s knob is restricted to gold instead — regression test for direct pixel sampling finding ender_chest\'s real knob texture (RGB 212,188,75) is a distinct golden-yellow, not the gray metal latch normal/trapped chests have (RGB 156,156,156 for both)', () => {
-    const chest = HAND_AUTHORED_TEMPLATES.chest;
-    const trapped = HAND_AUTHORED_TEMPLATES.trapped_chest;
-    const ender = HAND_AUTHORED_TEMPLATES.ender_chest;
-    expect(chest.elementPaletteRestrictions?.[2]).toEqual(trapped.elementPaletteRestrictions?.[2]);
-    expect(chest.elementPaletteRestrictions?.[2]).toContain('minecraft:light_gray_wool');
-    expect(ender.elementPaletteRestrictions?.[2]).toContain('minecraft:yellow_wool');
-    expect(ender.elementPaletteRestrictions?.[2]).not.toEqual(chest.elementPaletteRestrictions?.[2]);
+  it('with no real type/facing properties (type=single, or item mode\'s no-properties default), always builds the full unrotated chest regardless of a stray facing property alone', () => {
+    const plain = resolveHandAuthoredTemplate('chest')!;
+    const withFacingOnly = resolveHandAuthoredTemplate('chest', { facing: 'west' })!;
+    const withTypeSingle = resolveHandAuthoredTemplate('chest', { facing: 'west', type: 'single' })!;
+    expect(withFacingOnly.model.elements).toEqual(plain.model.elements);
+    expect(withTypeSingle.model.elements).toEqual(plain.model.elements);
+    expect(plain.model.elements).toHaveLength(4);
   });
 
-  it('chest/trapped_chest\'s base and lid are restricted to a curated wood-tone palette, but ender_chest\'s are left unrestricted — regression test for real-jar verification finding the unrestricted natural wrap matched across 14 different materials (raw logs, stripped logs, assorted planks, red_sandstone), a busy mosaic per explicit user feedback ("the yellow parts... suck"); ender_chest\'s real texture is an unrelated black/purple theme with no wood tone to curate', () => {
-    const chest = HAND_AUTHORED_TEMPLATES.chest;
-    const trapped = HAND_AUTHORED_TEMPLATES.trapped_chest;
-    const ender = HAND_AUTHORED_TEMPLATES.ender_chest;
-    const woodPalette = ['minecraft:gray_terracotta', 'minecraft:yellow_terracotta', 'minecraft:orange_terracotta'];
-    for (const t of [chest, trapped]) {
-      expect(t.elementPaletteRestrictions?.[0]).toEqual(woodPalette); // base
-      expect(t.elementPaletteRestrictions?.[1]).toEqual(woodPalette); // lid
-      expect(t.elementPaletteRestrictions?.[0]).not.toContain('minecraft:oak_log');
-      expect(t.elementPaletteRestrictions?.[0]).not.toContain('minecraft:stripped_dark_oak_log');
-    }
-    expect(ender.elementPaletteRestrictions?.[0]).toBeUndefined();
-    expect(ender.elementPaletteRestrictions?.[1]).toBeUndefined();
+  it('a real type=right/type=left chest (default facing=north, no rotation) extends fill/latch flush to the true block edge on the side facing its twin, per the confirmed left/right-to-compass rule (right\'s open side is west, left\'s is east, when facing=north) — still 4 elements, since there are no corner posts to omit in the real-vanilla-matched design', () => {
+    const right = resolveHandAuthoredTemplate('chest', { facing: 'north', type: 'right' })!;
+    expect(right.model.elements).toHaveLength(4);
+    const [rightBaseFill, rightLidFill] = right.model.elements;
+    const rightLatch = right.model.elements[right.model.elements.length - 1];
+    expect(rightBaseFill.from[0]).toBe(0); // flush to the true west edge, not inset to 2
+    expect(rightLidFill.from[0]).toBe(0);
+    expect(rightLatch.from[0]).toBe(0); // latch shifted flush to the same open (west) edge
+
+    const left = resolveHandAuthoredTemplate('chest', { facing: 'north', type: 'left' })!;
+    expect(left.model.elements).toHaveLength(4);
+    const [leftBaseFill, leftLidFill] = left.model.elements;
+    const leftLatch = left.model.elements[left.model.elements.length - 1];
+    expect(leftBaseFill.to[0]).toBe(16); // flush to the true east edge, not inset to 14
+    expect(leftLidFill.to[0]).toBe(16);
+    expect(leftLatch.to[0]).toBe(16);
   });
 
-  it('chest/trapped_chest\'s wood-tone palette includes orange_terracotta (round three, restored per explicit user request for "more orange texture") but still excludes brown_concrete — round two found the pairing of the two read as ugly off-hue blotches; brown_concrete was the more off-hue, no-man\'s-land offender of the pair and stays excluded, while orange_terracotta alone gives the real plank grain a second warm tone alongside the yellow family', () => {
-    const { elementPaletteRestrictions } = HAND_AUTHORED_TEMPLATES.chest;
-    expect(elementPaletteRestrictions?.[0]).toContain('minecraft:orange_terracotta');
-    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:brown_concrete');
-  });
+  it('rotates a double-chest half to match a real non-north facing — regression test against a real bundled double chest (woodland_mansion/1x2_a9): facing=west pairs type=right at the lower Z with type=left at the higher Z, i.e. right\'s open side is south and left\'s is north', () => {
+    const right = resolveHandAuthoredTemplate('trapped_chest', { facing: 'west', type: 'right' })!;
+    const rightBaseFill = right.model.elements[0];
+    expect(rightBaseFill.to[2]).toBe(16); // flush to the true south edge after rotation
 
-  it('chest/trapped_chest\'s wood-tone palette excludes black_terracotta/black_concrete and yellow_wool/yellow_concrete (round five) — regression test for a real-jar ASCII dump finding black_terracotta won a handful of asymmetric corner-column pixels (real texture grain noise) that broke the border\'s vertical stripe continuity on one side only, per explicit user feedback ("the stripes on the frame should be strict... you deleted some of it"); yellow_wool/yellow_concrete never won any real pixel at any resolution but are dropped anyway so the yellow fill is pure yellow_terracotta by construction, per explicit request ("clear yellow terracotta in the yellow part")', () => {
-    const { elementPaletteRestrictions } = HAND_AUTHORED_TEMPLATES.chest;
-    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:black_terracotta');
-    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:black_concrete');
-    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:yellow_wool');
-    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:yellow_concrete');
-  });
-
-  it('chest\'s base bottom face reuses its own top face\'s uv instead of the real texture\'s blank/unpainted rect there — regression test for direct pixel sampling finding the real chest.png\'s "bottom" formula rect is solid RGB(0,0,0) with zero alpha (Mojang never painted a real chest\'s underside since it\'s never visible in-game), which is visible here since this app renders the model freestanding rather than resting on a floor, per explicit user feedback ("you didn\'t fill the bottom... like you did in the top")', () => {
-    const { elements } = HAND_AUTHORED_TEMPLATES.chest.model;
-    const base = elements[0];
-    expect(base.faces.bottom?.uv).toEqual(base.faces.top?.uv);
-  });
-
-  it('chest\'s notch-cover patch sits directly above the knob, flush on the lid\'s own front face, and is restricted to a gray/black-free plank palette — regression test for real user feedback (a circled screenshot) that a real decorative clasp shape painted into the chest texture directly above the lock was showing as a jagged gray notch; the real content wasn\'t a bug, but the user wanted it simplified away into a clean plank continuation', () => {
-    const { model, elementPaletteRestrictions } = HAND_AUTHORED_TEMPLATES.chest;
-    const [, lid, knob, notchCover] = model.elements;
-    expect(notchCover.from[1]).toBeGreaterThanOrEqual(knob.to[1]); // sits above the knob, not overlapping it
-    expect(notchCover.to[1]).toBeLessThanOrEqual(lid.to[1]); // stays within the lid's own height
-    expect(notchCover.from[2]).toBeCloseTo(lid.from[2], 5); // flush on the lid's own front face
-    const palette = elementPaletteRestrictions?.[3];
-    expect(palette).not.toContain('minecraft:gray_terracotta');
-    expect(palette).not.toContain('minecraft:black_terracotta');
-    expect(palette).not.toContain('minecraft:black_concrete');
-    expect(palette).toContain('minecraft:yellow_terracotta');
-    expect(palette).toContain('minecraft:orange_terracotta');
+    const left = resolveHandAuthoredTemplate('trapped_chest', { facing: 'west', type: 'left' })!;
+    const leftBaseFill = left.model.elements[0];
+    expect(leftBaseFill.from[2]).toBe(0); // flush to the true north edge after rotation
   });
 
   it('every element has all 6 faces defined, each referencing one of its model\'s own texture variables', () => {
-    for (const { model } of Object.values(HAND_AUTHORED_TEMPLATES)) {
+    for (const key of Object.keys(HAND_AUTHORED_TEMPLATES)) {
+      const { model } = resolveHandAuthoredTemplate(key)!;
       for (const el of model.elements) {
         for (const face of ['top', 'bottom', 'north', 'south', 'east', 'west'] as const) {
           const faceDef = el.faces[face];
@@ -107,17 +106,17 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
   it('includes all 17 shulker box variants (plain + 16 dye colors)', () => {
     const shulkerKeys = Object.keys(HAND_AUTHORED_TEMPLATES).filter((k) => k.includes('shulker_box'));
     expect(shulkerKeys).toHaveLength(17);
-    expect(HAND_AUTHORED_TEMPLATES.shulker_box.model.textures.main).toBe('shulker/shulker');
-    expect(HAND_AUTHORED_TEMPLATES.black_shulker_box.model.textures.main).toBe('shulker/shulker_black');
+    expect(resolveHandAuthoredTemplate('shulker_box')!.model.textures.main).toBe('shulker/shulker');
+    expect(resolveHandAuthoredTemplate('black_shulker_box')!.model.textures.main).toBe('shulker/shulker_black');
   });
 
   it('includes all 16 bed colors, each a genuinely 2-block-long (depthUnits=32) structure with 14 elements', () => {
     const bedKeys = Object.keys(HAND_AUTHORED_TEMPLATES).filter((k) => k.endsWith('_bed'));
     expect(bedKeys).toHaveLength(16);
-    expect(HAND_AUTHORED_TEMPLATES.red_bed.model.textures.main).toBe('bed/red');
-    expect(HAND_AUTHORED_TEMPLATES.white_bed.model.textures.main).toBe('bed/white');
-    expect(HAND_AUTHORED_TEMPLATES.red_bed.heightUnits).toBe(16);
-    expect(HAND_AUTHORED_TEMPLATES.red_bed.depthUnits).toBe(32);
+    expect(resolveHandAuthoredTemplate('red_bed')!.model.textures.main).toBe('bed/red');
+    expect(resolveHandAuthoredTemplate('white_bed')!.model.textures.main).toBe('bed/white');
+    expect(resolveHandAuthoredTemplate('red_bed')!.heightUnits).toBe(16);
+    expect(resolveHandAuthoredTemplate('red_bed')!.depthUnits).toBe(32);
 
     // Pillow (element 1 — mattress and pillow are listed first, see bedModel's doc on why order
     // matters for resolveFallbackTexture.ts) is restricted away from stone — regression test for
@@ -126,7 +125,8 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
     // clarifying the fix should drop only diorite, keeping both wool and concrete so the original
     // multi-shade gradient/pattern isn't flattened. Every bed color shares this restriction.
     for (const key of bedKeys) {
-      expect(HAND_AUTHORED_TEMPLATES[key].elementPaletteRestrictions?.[1]).toEqual([
+      const bed = resolveHandAuthoredTemplate(key)!;
+      expect(bed.elementPaletteRestrictions?.[1]).toEqual([
         'minecraft:white_wool',
         'minecraft:white_concrete',
         'minecraft:light_gray_wool',
@@ -139,18 +139,14 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
       // "thick, random blocks of dark color" — fixed by dropping dark_oak from the base entirely and
       // moving it to dedicated seam-line elements instead (see indices 7-13 below).
       for (const i of [2, 3, 4, 5, 6]) {
-        expect(HAND_AUTHORED_TEMPLATES[key].elementPaletteRestrictions?.[i]).toEqual([
-          'minecraft:oak_planks',
-          'minecraft:oak_log',
-          'minecraft:stripped_oak_log',
-        ]);
+        expect(bed.elementPaletteRestrictions?.[i]).toEqual(['minecraft:oak_planks', 'minecraft:oak_log', 'minecraft:stripped_oak_log']);
       }
       // The 7 seam-line elements (7-13) are restricted to the union of light oak (their 5
       // non-bottom faces) and a softer medium-brown pair (their bottom face only, via
       // stretchedBoxWithBottom) — round 6's fix for real user feedback that round 5's dark_oak-only
       // restriction both "spilled over" onto the outer side frame and read as "too dark/black".
       for (const i of [7, 8, 9, 10, 11, 12, 13]) {
-        expect(HAND_AUTHORED_TEMPLATES[key].elementPaletteRestrictions?.[i]).toEqual([
+        expect(bed.elementPaletteRestrictions?.[i]).toEqual([
           'minecraft:oak_planks',
           'minecraft:oak_log',
           'minecraft:stripped_oak_log',
@@ -159,10 +155,10 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
         ]);
       }
       // Only the mattress (0) is unrestricted — it keeps the full shared palette for its dyed color.
-      expect(HAND_AUTHORED_TEMPLATES[key].elementPaletteRestrictions?.[0]).toBeUndefined();
+      expect(bed.elementPaletteRestrictions?.[0]).toBeUndefined();
     }
 
-    const { elements } = HAND_AUTHORED_TEMPLATES.red_bed.model;
+    const { elements } = resolveHandAuthoredTemplate('red_bed')!.model;
     expect(elements).toHaveLength(14); // mattress + pillow + rail base + 4 legs + 7 seam lines
     for (const el of elements) {
       for (const v of [el.from[0], el.to[0], el.from[1], el.to[1]]) {
@@ -177,7 +173,7 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
   });
 
   it('bed: 7 dark seam-line elements sit evenly spaced (every 4 units) across the rail\'s full width, on the rail\'s own Y-slice only, and never overlap a leg\'s Z footprint — regression test for real user feedback that seams must be "1-pixel wide, straight, parallel... evenly across the bottom", not the "thick, random blocks" a wider natural-texture palette produced', () => {
-    const { elements } = HAND_AUTHORED_TEMPLATES.red_bed.model;
+    const { elements } = resolveHandAuthoredTemplate('red_bed')!.model;
     const [, , rail, , , , , ...seams] = elements;
     expect(seams).toHaveLength(7);
 
@@ -207,7 +203,7 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
   });
 
   it('bed: each seam element\'s bottom face uses a different (darker) UV rect than its other 5 faces, and those 5 faces are byte-identical to the rail base\'s own rect — regression test for real user feedback that the seam color was "spilling over" onto the outer side frame (the seam\'s east/west faces sit at the model\'s true X=0/X=16 boundary and were exposed there too)', () => {
-    const { elements } = HAND_AUTHORED_TEMPLATES.red_bed.model;
+    const { elements } = resolveHandAuthoredTemplate('red_bed')!.model;
     const [, , rail, , , , , ...seams] = elements;
 
     for (const seam of seams) {
@@ -225,7 +221,7 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
 
   it('bed: the first element in every color\'s elements array resolves to that color\'s own dye-specific texture, not the fixed oak_planks/oak_log frame texture — regression test for a real bug: resolveFallbackTexture.ts\'s firstTextureKey walks elements in order and returns the first resolvable one as a representative color for structure mode\'s multi-cell fallback tier, so if a same-for-every-color oak texture were first, every dye color would fall back to the same oak-brown instead of its own color (caught by buildStructureVoxelGrid.test.ts)', () => {
     for (const color of ['red', 'white', 'blue']) {
-      const { model } = HAND_AUTHORED_TEMPLATES[`${color}_bed`];
+      const { model } = resolveHandAuthoredTemplate(`${color}_bed`)!;
       const firstFace = Object.values(model.elements[0].faces)[0]!;
       const varName = firstFace.texture.slice(1);
       expect(model.textures[varName]).toBe(`bed/${color}`);
@@ -233,7 +229,7 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
   });
 
   it('bed: total height is 9 (5 wooden frame + 4 mattress — rebalanced from the original 3/6 split per real user feedback that legs read too short and the mattress too thick), with 4 corner legs, a full-footprint rail, a full-length blanket, and a pillow overlaid at the rear-top of the head section', () => {
-    const { elements } = HAND_AUTHORED_TEMPLATES.red_bed.model;
+    const { elements } = resolveHandAuthoredTemplate('red_bed')!.model;
     const [mattress, pillow, rail, legA, legB, legC, legD] = elements;
 
     // Nothing in the model exceeds the total height of 9 — the rebalance only moved the
@@ -274,7 +270,7 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
   });
 
   it('bed: mattress and pillow top faces use a different UV rect than their other 5 faces, per an explicit "texture mapping only" request — everything else (including bottom/side UV) stays byte-identical to the pre-touch-up rects', () => {
-    const { elements } = HAND_AUTHORED_TEMPLATES.red_bed.model;
+    const { elements } = resolveHandAuthoredTemplate('red_bed')!.model;
     const [mattress, pillow] = elements;
 
     for (const el of [mattress, pillow]) {
@@ -307,7 +303,7 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
   });
 
   it('beacon is a genuinely hollow glass shell (6 thin panels) around a real, unburied crystal', () => {
-    const { model, heightUnits, depthUnits, elementPaletteRestrictions } = HAND_AUTHORED_TEMPLATES.beacon;
+    const { model, heightUnits, depthUnits, elementPaletteRestrictions } = resolveHandAuthoredTemplate('beacon')!;
     expect(heightUnits).toBe(16);
     expect(depthUnits).toBe(16);
     expect(model.textures).toEqual({ glass: 'glass', obsidian: 'obsidian', beacon: 'beacon' });
@@ -352,12 +348,12 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
   it('includes standing + wall sign for all 12 wood types, sharing geometry and texture per wood', () => {
     const signKeys = Object.keys(HAND_AUTHORED_TEMPLATES).filter((k) => k.includes('sign'));
     expect(signKeys).toHaveLength(24); // 12 woods x (standing + wall)
-    expect(HAND_AUTHORED_TEMPLATES.oak_sign.model.textures.main).toBe('signs/oak');
-    expect(HAND_AUTHORED_TEMPLATES.oak_wall_sign.model.textures.main).toBe('signs/oak');
-    expect(HAND_AUTHORED_TEMPLATES.oak_sign.model.elements).toEqual(HAND_AUTHORED_TEMPLATES.oak_wall_sign.model.elements);
-    expect(HAND_AUTHORED_TEMPLATES.oak_sign.depthUnits).toBe(16);
+    expect(resolveHandAuthoredTemplate('oak_sign')!.model.textures.main).toBe('signs/oak');
+    expect(resolveHandAuthoredTemplate('oak_wall_sign')!.model.textures.main).toBe('signs/oak');
+    expect(resolveHandAuthoredTemplate('oak_sign')!.model.elements).toEqual(resolveHandAuthoredTemplate('oak_wall_sign')!.model.elements);
+    expect(resolveHandAuthoredTemplate('oak_sign')!.depthUnits).toBe(16);
 
-    const { elements } = HAND_AUTHORED_TEMPLATES.warped_sign.model;
+    const { elements } = resolveHandAuthoredTemplate('warped_sign')!.model;
     expect(elements).toHaveLength(2); // post + board
     for (const el of elements) {
       for (const v of [...el.from, ...el.to]) {
@@ -383,18 +379,18 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
       player_wall_head: 'player/wide/steve',
     };
     for (const [name, textureKey] of Object.entries(expected)) {
-      const t = HAND_AUTHORED_TEMPLATES[name];
+      const t = resolveHandAuthoredTemplate(name);
       expect(t, `${name} missing`).toBeDefined();
-      expect(t.model.textures.main).toBe(textureKey);
-      expect(t.model.elements).toHaveLength(1);
-      expect(t.model.elements[0].from).toEqual([4, 0, 4]);
-      expect(t.model.elements[0].to).toEqual([12, 8, 12]);
-      expect(t.heightUnits).toBe(16);
-      expect(t.depthUnits).toBe(16);
+      expect(t!.model.textures.main).toBe(textureKey);
+      expect(t!.model.elements).toHaveLength(1);
+      expect(t!.model.elements[0].from).toEqual([4, 0, 4]);
+      expect(t!.model.elements[0].to).toEqual([12, 8, 12]);
+      expect(t!.heightUnits).toBe(16);
+      expect(t!.depthUnits).toBe(16);
     }
     // Standing and wall variants share identical geometry (no rotation handling), same precedent
     // as sign/wall_sign.
-    expect(HAND_AUTHORED_TEMPLATES.zombie_head.model.elements).toEqual(HAND_AUTHORED_TEMPLATES.zombie_wall_head.model.elements);
+    expect(resolveHandAuthoredTemplate('zombie_head')!.model.elements).toEqual(resolveHandAuthoredTemplate('zombie_wall_head')!.model.elements);
     expect(HAND_AUTHORED_TEMPLATES.dragon_head).toBeUndefined();
     expect(HAND_AUTHORED_TEMPLATES.dragon_wall_head).toBeUndefined();
   });
@@ -407,11 +403,11 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
       'minecraft:white_concrete', 'minecraft:white_wool', 'minecraft:white_terracotta',
     ];
     for (const name of ['skeleton_skull', 'skeleton_wall_skull', 'wither_skeleton_skull', 'wither_skeleton_wall_skull']) {
-      expect(HAND_AUTHORED_TEMPLATES[name].elementPaletteRestrictions?.[0]).toEqual(grayscale);
+      expect(resolveHandAuthoredTemplate(name)!.elementPaletteRestrictions?.[0]).toEqual(grayscale);
     }
     // Every other head/skull is untouched — no evidence they had the same problem.
     for (const name of ['zombie_head', 'creeper_head', 'piglin_head', 'player_head']) {
-      expect(HAND_AUTHORED_TEMPLATES[name].elementPaletteRestrictions).toBeUndefined();
+      expect(resolveHandAuthoredTemplate(name)!.elementPaletteRestrictions).toBeUndefined();
     }
   });
 });

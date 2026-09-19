@@ -2,7 +2,7 @@ import type { FaceName, FaceTexture, PaletteEntry, VoxelGrid } from '../../types
 import { resolveItemModel } from './resolveItemModel';
 import { rasterizeItemModel } from './rasterizeModel';
 import { resolveTexturePath, texturePathToKey } from './resolveTextureVariable';
-import { HAND_AUTHORED_TEMPLATES } from './handAuthoredTemplates';
+import { resolveHandAuthoredTemplate } from './handAuthoredTemplates';
 import { filterPaletteForSource } from '../palette/glassSource';
 import { filterLightSourcesForSource } from '../palette/lightSourceExclusion';
 import { filterPaletteForLeafSource } from '../palette/leafSource';
@@ -86,7 +86,7 @@ export async function buildItemVoxelGrid(
   resolution: number,
   options?: { rejectMultiCell?: boolean; properties?: Record<string, string>; suppressedFaces?: ReadonlySet<FaceName> }
 ): Promise<VoxelGrid> {
-  const handAuthored = HAND_AUTHORED_TEMPLATES[itemName];
+  const handAuthored = resolveHandAuthoredTemplate(itemName, options?.properties);
   const { model, heightUnits, depthUnits } =
     handAuthored ?? (await resolveItemModel(itemName, blockStateFiles, modelFiles, options?.properties));
 
