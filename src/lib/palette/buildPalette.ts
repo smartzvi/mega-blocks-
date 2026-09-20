@@ -39,6 +39,7 @@ export function buildPalette(extractedTextures: Map<string, BlockTextureSet>): P
       gravityAffected: def.gravityAffected,
       endGrainTopBottom: def.endGrainTopBottom,
       glassOnly: def.glassOnly,
+      earthOnly: def.earthOnly,
       lightSource: def.lightSource,
     });
   }

@@ -25,6 +25,12 @@ export interface FullCubeBlockDef {
    *  the light-sources section). `filterPaletteForSource` (glassSource.ts) strips every
    *  `glassOnly` entry out of the palette unless the selected source is itself glass-family. */
   glassOnly?: boolean;
+  /** Real dirt (`dirt`, `coarse_dirt`) — only belongs in a build that is itself dirt/grass-family
+   *  (a grass block, a farmland or path block, ...): there it is the *correct* material for the
+   *  brown soil texture, but as generic filler it would just add muddy patches to unrelated brown
+   *  builds. `filterPaletteForSource` (glassSource.ts) strips every `earthOnly` entry unless the
+   *  selected source is earth-family (earthSource.ts). Same gating idea as `glassOnly`. */
+  earthOnly?: boolean;
   /** A real light-emitting block (glowstone, sea_lantern — the froglights were removed outright
    *  per explicit user request, see the light-sources section below). Unlike `glassOnly`,
    *  this isn't restricted to a specific source family — it's eligible everywhere by default, but
@@ -47,7 +53,7 @@ const OVERWORLD_WOODS = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak
 function block(
   name: string,
   family: MaterialFamily,
-  flags?: Pick<FullCubeBlockDef, 'gravityAffected' | 'endGrainTopBottom' | 'glassOnly' | 'lightSource'> & {
+  flags?: Pick<FullCubeBlockDef, 'gravityAffected' | 'endGrainTopBottom' | 'glassOnly' | 'earthOnly' | 'lightSource'> & {
     textureBase?: string;
   }
 ): FullCubeBlockDef {
@@ -135,6 +141,11 @@ export const FULL_CUBE_BLOCKS: FullCubeBlockDef[] = [
 
   // Earthy fill
   block('mud', 'wood_earth'), block('packed_mud', 'wood_earth'),
+  // Real dirt, gated `earthOnly`: without it a grass block's sides, a dirt path or a field came
+  // out as spruce planks, logs and even glowstone, because nothing in the palette was actually
+  // dirt (confirmed against the real jar). Only offered to dirt/grass-family sources — see the
+  // `earthOnly` doc on FullCubeBlockDef.
+  block('dirt', 'wood_earth', { earthOnly: true }), block('coarse_dirt', 'wood_earth', { earthOnly: true }),
 
   // Real light sources — so a build with warm/glowing-colored pixels (a lantern, a torch, a
   // glowing item, ...) can come out of blocks that actually emit light in-game too, not just
