@@ -1,6 +1,7 @@
 import type { FaceName, PaletteEntry, VoxelGrid } from '../../types/minecraft';
 import type { TextureDecoder } from '../models/buildItemVoxelGrid';
 import { buildStructureBlockStamp } from './buildStructureBlockStamp';
+import { throttledProgress, type BuildProgressCallback } from './buildProgress';
 import { cullComposedInterior } from './cullComposedInterior';
 import { MAX_FINAL_VOXELS, checkVolume } from './safetyLimits';
 import { createVoxelGrid, forEachVoxel, getVoxel, setVoxel } from '../voxel/voxelGrid';
@@ -93,11 +94,16 @@ export async function buildStructureVoxelGrid(
   decodeTexture: TextureDecoder,
   blockStateFiles: FileLoaderMap,
   modelFiles: FileLoaderMap,
-  resolution: number
+  resolution: number,
+  onProgress?: BuildProgressCallback
 ): Promise<VoxelGrid> {
   const sizeX = culled.sizeX * resolution;
   const sizeY = culled.sizeY * resolution;
   const sizeZ = culled.sizeZ * resolution;
+
+  const reportStamps = throttledProgress('stamps', onProgress);
+  const reportPlace = throttledProgress('place', onProgress);
+  const reportTrim = throttledProgress('trim', onProgress);
 
   const stamps = new Map<string, VoxelGrid>();
   async function getStamp(blockId: string, suppressedFaces: ReadonlySet<FaceName>): Promise<VoxelGrid> {
@@ -113,8 +119,10 @@ export async function buildStructureVoxelGrid(
   // Build the plain (no-suppression) stamp for every registered id up front, same as before —
   // guarantees one exists even for an id that's registered (e.g. by knownStructureFixes.ts) but
   // not actually present in `culled`.
+  let stampsDone = 0;
   for (const id of blockIds) {
     await getStamp(id, NO_SUPPRESSED_FACES);
+    reportStamps(++stampsDone / (blockIds.size + culled.voxels.size));
   }
 
   const solidCellPositions: Array<readonly [number, number, number, string]> = [];
@@ -126,15 +134,22 @@ export async function buildStructureVoxelGrid(
     const stamp = await getStamp(blockId, suppressedFacesFor(culled, sx, sy, sz, blockId));
     solidVoxelCount += stamp.voxels.size;
     cells.push({ ox: sx * resolution, oy: sy * resolution, oz: sz * resolution, stamp });
+    reportStamps(++stampsDone / (blockIds.size + solidCellPositions.length));
   }
   checkVolume(solidVoxelCount, MAX_FINAL_VOXELS, 'This structure at this resolution');
+  reportStamps(1);
 
   const grid = createVoxelGrid(sizeX, sizeY, sizeZ);
+  let placed = 0;
   for (const { ox, oy, oz, stamp } of cells) {
     forEachVoxel(stamp, (x, y, z, v) => {
       setVoxel(grid, ox + x, oy + y, oz + z, v);
     });
+    reportPlace(++placed / cells.length);
   }
+  reportPlace(1);
 
-  return cullComposedInterior(grid);
+  const trimmed = cullComposedInterior(grid, reportTrim);
+  reportTrim(1);
+  return trimmed;
 }

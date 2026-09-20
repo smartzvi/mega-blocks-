@@ -16,6 +16,9 @@ export interface StructureSource {
 export interface AppState {
   status: 'idle' | 'loading-archive' | 'building-palette' | 'ready' | 'error';
   errorMessage: string | null;
+  /** The uploaded jar itself, kept so the background structure-build worker can load its own copy
+   *  (the per-file loaders below are closures over the page's archive and can't cross to a worker). */
+  archiveFile: File | null;
   extractedTextures: Map<string, BlockTextureSet> | null;
   /** Raw per-file loaders kept around (unlike the discarded JSZip instance) so item mode can
    *  look up an arbitrary model/blockstate/texture on demand, not just the block-grouped ones. */
@@ -44,6 +47,7 @@ export interface AppState {
 const initialState: AppState = {
   status: 'idle',
   errorMessage: null,
+  archiveFile: null,
   extractedTextures: null,
   blockTextureFiles: null,
   entityTextureFiles: null,
@@ -71,6 +75,7 @@ export type AppAction =
   | { type: 'ARCHIVE_LOADING' }
   | {
       type: 'ARCHIVE_LOADED';
+      archiveFile: File;
       extractedTextures: Map<string, BlockTextureSet>;
       blockTextureFiles: FileLoaderMap;
       entityTextureFiles: FileLoaderMap;
@@ -104,6 +109,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         status: 'building-palette',
+        archiveFile: action.archiveFile,
         extractedTextures: action.extractedTextures,
         blockTextureFiles: action.blockTextureFiles,
         entityTextureFiles: action.entityTextureFiles,

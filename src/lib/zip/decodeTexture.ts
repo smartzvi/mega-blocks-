@@ -2,6 +2,18 @@ import type { FaceTexture } from '../../types/minecraft';
 
 const TILE_SIZE = 16;
 
+/** A 2D drawing surface that works both on the page and inside a Web Worker: a worker has no
+ *  `document`, so it uses OffscreenCanvas, which has the same drawImage/getImageData API. */
+function createContext2d(width: number, height: number): CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D {
+  if (typeof document !== 'undefined') {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    return canvas.getContext('2d')!;
+  }
+  return new OffscreenCanvas(width, height).getContext('2d')!;
+}
+
 /** Decodes PNG bytes and returns only the top-left 16x16 tile (first animation frame). Returns
  *  null (with a console warning) for anything that isn't a clean 16-wide, 16-multiple-tall PNG. */
 export async function decodeTextureTile(bytes: Uint8Array, debugKey: string): Promise<FaceTexture | null> {
@@ -16,10 +28,7 @@ export async function decodeTextureTile(bytes: Uint8Array, debugKey: string): Pr
     return null;
   }
 
-  const canvas = document.createElement('canvas');
-  canvas.width = TILE_SIZE;
-  canvas.height = TILE_SIZE;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = createContext2d(TILE_SIZE, TILE_SIZE);
   // Only the first (top) frame of an animated strip is used as the static representative texture.
   ctx.drawImage(bitmap, 0, 0, TILE_SIZE, TILE_SIZE, 0, 0, TILE_SIZE, TILE_SIZE);
   bitmap.close();
@@ -48,15 +57,13 @@ async function decodeTextureNative(bytes: Uint8Array): Promise<FaceTexture> {
   const blob = new Blob([bytes as BlobPart], { type: 'image/png' });
   const bitmap = await createImageBitmap(blob);
 
-  const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  const ctx = canvas.getContext('2d')!;
+  const { width, height } = bitmap;
+  const ctx = createContext2d(width, height);
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
 
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  return { width: canvas.width, height: canvas.height, data: imageData.data };
+  const imageData = ctx.getImageData(0, 0, width, height);
+  return { width, height, data: imageData.data };
 }
 
 /** Looks up and decodes a single raw entity texture file (e.g. "chest/normal") at its native

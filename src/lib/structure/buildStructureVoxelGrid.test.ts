@@ -3,6 +3,7 @@ import { averageColorHsv, averageColorLab } from '../color/averageColor';
 import type { FaceTexture, MaterialFamily, PaletteEntry } from '../../types/minecraft';
 import { MAX_FINAL_VOXELS } from './safetyLimits';
 import { buildStructureVoxelGrid } from './buildStructureVoxelGrid';
+import type { BuildProgress } from './buildProgress';
 import { createVoxelGrid, getVoxel, setVoxel } from '../voxel/voxelGrid';
 
 function solidTexture(r: number, g: number, b: number): FaceTexture {
@@ -241,6 +242,44 @@ describe('buildStructureVoxelGrid', () => {
     // Unlike the log case, the internal seam still end-caps on both sides — stairs are excluded.
     expect(getVoxel(result, 0, 7, 4)).toBe('minecraft:end_color');
     expect(getVoxel(result, 0, 8, 4)).toBe('minecraft:end_color');
+  });
+
+  describe('progress reporting', () => {
+    const setup = () => {
+      const culled = createVoxelGrid(2, 1, 1);
+      setVoxel(culled, 0, 0, 0, 'minecraft:red_bed');
+      setVoxel(culled, 1, 0, 0, 'minecraft:blue_bed');
+      const decodeTexture = async (key: string) => {
+        if (key === 'bed/red') return solidTexture(160, 40, 40);
+        if (key === 'bed/blue') return solidTexture(40, 40, 160);
+        return null;
+      };
+      const palette = [fakePaletteEntry('minecraft:red_color', 160, 40, 40), fakePaletteEntry('minecraft:blue_color', 40, 40, 160)];
+      return { culled, decodeTexture, palette, ids: new Set(['minecraft:red_bed', 'minecraft:blue_bed']) };
+    };
+
+    it('reports the stages in order, each ending at 1, with every fraction between 0 and 1 and never going backwards within a stage', async () => {
+      const { culled, decodeTexture, palette, ids } = setup();
+      const events: BuildProgress[] = [];
+      await buildStructureVoxelGrid(culled, ids, palette, decodeTexture, noFiles, noFiles, 16, (p) => events.push(p));
+
+      const stagesSeen = events.map((e) => e.stage).filter((stage, i, all) => all.indexOf(stage) === i);
+      expect(stagesSeen).toEqual(['stamps', 'place', 'trim']);
+      for (const stage of stagesSeen) {
+        const own = events.filter((e) => e.stage === stage).map((e) => e.fraction);
+        expect(own[own.length - 1]).toBe(1);
+        expect(own.every((f) => f >= 0 && f <= 1)).toBe(true);
+        expect([...own].sort((a, b) => a - b)).toEqual(own);
+      }
+    });
+
+    it('produces exactly the same grid whether or not progress is being reported', async () => {
+      const a = setup();
+      const b = setup();
+      const plain = await buildStructureVoxelGrid(a.culled, a.ids, a.palette, a.decodeTexture, noFiles, noFiles, 16);
+      const reported = await buildStructureVoxelGrid(b.culled, b.ids, b.palette, b.decodeTexture, noFiles, noFiles, 16, () => {});
+      expect([...reported.voxels].sort()).toEqual([...plain.voxels].sort());
+    });
   });
 
   it('rejects a composition whose real solid-voxel count exceeds the safety cap, before allocating the composed grid', async () => {

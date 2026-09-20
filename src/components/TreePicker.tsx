@@ -4,6 +4,10 @@ import { generateTreeGrid, TREE_SPECIES_NAMES, type TreeSpecies } from '../lib/t
 import { cullInteriorVoxels } from '../lib/structure/cullInteriorVoxels';
 import { buildStructureVoxelGrid } from '../lib/structure/buildStructureVoxelGrid';
 import { loadAndDecodeEntityTexture, loadAndDecodeTexture } from '../lib/zip/decodeTexture';
+import { buildStructureGrid, warmUpStructureWorker } from '../lib/structure/structureBuildClient';
+import type { BuildProgress } from '../lib/structure/buildProgress';
+import { isAbortError } from '../lib/structure/isAbortError';
+import { BuildProgressBar } from './BuildProgressBar';
 
 // Fixed, short list sourced entirely from generateTreeGrid.ts's own registry, not from any
 // uploaded-jar map — like MobPicker, tree support doesn't vary per jar, so a simple button row is
@@ -13,6 +17,12 @@ export function TreePicker() {
   const dispatch = useAppDispatch();
   const [error, setError] = useState<string | null>(null);
   const [isBuilding, setIsBuilding] = useState(false);
+  const [progress, setProgress] = useState<BuildProgress | null>(null);
+
+  // Warm the background build worker while the user is still choosing (see StructurePicker.tsx).
+  useEffect(() => {
+    warmUpStructureWorker(state.archiveFile, state.palette);
+  }, [state.archiveFile, state.palette]);
 
   // Mirrors StructurePicker.tsx's voxelization effect exactly, except the source grid comes from
   // the synchronous local `generateTreeGrid` instead of `parseStructureFile(bytes)` — everything
@@ -31,9 +41,11 @@ export function TreePicker() {
     const treeName = state.selectedTreeName as TreeSpecies;
     const palette = state.palette;
     let cancelled = false;
+    const controller = new AbortController();
 
     setError(null);
     setIsBuilding(true);
+    setProgress(null);
 
     (async () => {
       try {
@@ -43,31 +55,35 @@ export function TreePicker() {
         const decodeTexture = async (key: string) =>
           (await loadAndDecodeTexture(key, state.blockTextureFiles!)) ?? loadAndDecodeEntityTexture(key, state.entityTextureFiles!);
 
-        const voxelGrid = await buildStructureVoxelGrid(
-          culled,
-          blockIds,
-          palette,
-          decodeTexture,
-          state.blockStateFiles!,
-          state.modelFiles!,
-          state.resolution
+        // Same background-worker build (with the in-page build as fallback) as structure mode.
+        const voxelGrid = await buildStructureGrid(
+          { file: state.archiveFile, palette, culled, blockIds, resolution: state.resolution },
+          { signal: controller.signal, onProgress: (p) => !cancelled && setProgress(p) },
+          (onProgress) =>
+            buildStructureVoxelGrid(culled, blockIds, palette, decodeTexture, state.blockStateFiles!, state.modelFiles!, state.resolution, onProgress)
         );
 
         if (!cancelled) dispatch({ type: 'TREE_VOXELIZED', treeVoxelGrid: voxelGrid });
       } catch (err) {
+        if (isAbortError(err)) return; // superseded by a newer selection — not a failure
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       } finally {
-        if (!cancelled) setIsBuilding(false);
+        if (!cancelled) {
+          setIsBuilding(false);
+          setProgress(null);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     state.selectedTreeName,
     state.resolution,
+    state.archiveFile,
     state.palette,
     state.blockTextureFiles,
     state.entityTextureFiles,
@@ -118,6 +134,7 @@ export function TreePicker() {
           </span>
         </div>
       )}
+      {isBuilding && <BuildProgressBar progress={progress} />}
       {error && (
         <p className="rounded-lg bg-red-950/50 px-3 py-2 text-center text-xs text-red-300 ring-1 ring-red-900">{error}</p>
       )}

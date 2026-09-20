@@ -18,13 +18,18 @@ import { createVoxelGrid, forEachVoxel, getVoxel, setVoxel } from '../voxel/voxe
  * this after composition merges any such touching walls that turn out to be fully interior once real
  * neighbors are known, without changing anything visible from outside.
  */
-export function cullComposedInterior(grid: VoxelGrid): VoxelGrid {
+export function cullComposedInterior(grid: VoxelGrid, onProgress?: (fraction: number) => void): VoxelGrid {
   const { sizeX, sizeY, sizeZ } = grid;
 
   const isSolidAt = (x: number, y: number, z: number): boolean => getVoxel(grid, x, y, z) !== null;
 
+  const total = grid.voxels.size;
+  let visited = 0;
   const culled = createVoxelGrid(sizeX, sizeY, sizeZ);
   forEachVoxel(grid, (x, y, z, id) => {
+    // Cheap counter check on every cell; the callback itself only fires on whole-percent changes
+    // (see throttledProgress), so reporting adds almost nothing to a multi-million-cell loop.
+    if (onProgress && ++visited % 4096 === 0) onProgress(visited / total);
     const fullyBuried =
       isSolidAt(x + 1, y, z) &&
       isSolidAt(x - 1, y, z) &&

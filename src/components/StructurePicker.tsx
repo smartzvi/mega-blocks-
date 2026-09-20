@@ -5,6 +5,10 @@ import { cullInteriorVoxels } from '../lib/structure/cullInteriorVoxels';
 import { buildStructureVoxelGrid } from '../lib/structure/buildStructureVoxelGrid';
 import { applyKnownStructureFixes } from '../lib/structure/knownStructureFixes';
 import { loadAndDecodeEntityTexture, loadAndDecodeTexture } from '../lib/zip/decodeTexture';
+import { buildStructureGrid, warmUpStructureWorker } from '../lib/structure/structureBuildClient';
+import type { BuildProgress } from '../lib/structure/buildProgress';
+import { isAbortError } from '../lib/structure/isAbortError';
+import { BuildProgressBar } from './BuildProgressBar';
 
 /** Strips a common structure-file extension (and any directory the browser's file picker might
  *  report) so a custom upload's display name matches the style of a built-in structure's name. */
@@ -19,6 +23,7 @@ export function StructurePicker() {
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isBuilding, setIsBuilding] = useState(false);
+  const [progress, setProgress] = useState<BuildProgress | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Every .nbt file the jar bundled under data/minecraft/structure/ — nested folders are kept as
@@ -45,6 +50,12 @@ export function StructurePicker() {
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, []);
 
+  // Start the background build worker as soon as this picker shows, while the user is still
+  // choosing — it loads the jar and warms up before the first real build asks for it.
+  useEffect(() => {
+    warmUpStructureWorker(state.archiveFile, state.palette);
+  }, [state.archiveFile, state.palette]);
+
   // Re-runs whenever the selected structure OR the output resolution changes, mirroring
   // ItemPicker.tsx's re-build effect — `resolution` means exactly what it means in item mode too
   // (voxels per source block: 16/32/48/64), not a multiplier applied on top of an already-built
@@ -63,9 +74,11 @@ export function StructurePicker() {
     const source = state.selectedStructureSource;
     const palette = state.palette;
     let cancelled = false;
+    const controller = new AbortController();
 
     setError(null);
     setIsBuilding(true);
+    setProgress(null);
     dispatch({ type: 'STRUCTURE_VOXELIZING' });
 
     (async () => {
@@ -81,31 +94,37 @@ export function StructurePicker() {
         const decodeTexture = async (key: string) =>
           (await loadAndDecodeTexture(key, state.blockTextureFiles!)) ?? loadAndDecodeEntityTexture(key, state.entityTextureFiles!);
 
-        const voxelGrid = await buildStructureVoxelGrid(
-          culled,
-          blockIds,
-          palette,
-          decodeTexture,
-          state.blockStateFiles!,
-          state.modelFiles!,
-          state.resolution
+        // The heavy part (stamping, composing and trimming the final grid) runs in a background
+        // worker so the page keeps responding, reporting progress as it goes; the in-page build is
+        // only the fallback when no worker is available.
+        const voxelGrid = await buildStructureGrid(
+          { file: state.archiveFile, palette, culled, blockIds, resolution: state.resolution },
+          { signal: controller.signal, onProgress: (p) => !cancelled && setProgress(p) },
+          (onProgress) =>
+            buildStructureVoxelGrid(culled, blockIds, palette, decodeTexture, state.blockStateFiles!, state.modelFiles!, state.resolution, onProgress)
         );
 
         if (!cancelled) dispatch({ type: 'STRUCTURE_VOXELIZED', voxelGrid });
       } catch (err) {
+        if (isAbortError(err)) return; // superseded by a newer selection — not a failure
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       } finally {
-        if (!cancelled) setIsBuilding(false);
+        if (!cancelled) {
+          setIsBuilding(false);
+          setProgress(null);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     state.selectedStructureSource,
     state.resolution,
+    state.archiveFile,
     state.palette,
     state.blockTextureFiles,
     state.entityTextureFiles,
@@ -209,6 +228,7 @@ export function StructurePicker() {
           </span>
         </div>
       )}
+      {isBuilding && <BuildProgressBar progress={progress} />}
       {error && (
         <p className="rounded-lg bg-red-950/50 px-3 py-2 text-center text-xs text-red-300 ring-1 ring-red-900">{error}</p>
       )}

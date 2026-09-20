@@ -29,6 +29,7 @@ export function UploadPanel() {
       }
       dispatch({
         type: 'ARCHIVE_LOADED',
+        archiveFile: file,
         extractedTextures,
         blockTextureFiles: archive.blockTextureFiles,
         entityTextureFiles: archive.entityTextureFiles,
