@@ -6,6 +6,7 @@ import { ResolutionToggle } from './components/ResolutionToggle';
 import { ModeToggle } from './components/ModeToggle';
 import { BlockSearch } from './components/BlockSearch';
 import { ShapeSelector } from './components/ShapeSelector';
+import { ConnectionToggle } from './components/ConnectionToggle';
 import { ItemPicker } from './components/ItemPicker';
 import { StructurePicker } from './components/StructurePicker';
 import { MobPicker } from './components/MobPicker';
@@ -29,6 +30,7 @@ function Workspace() {
       )}
       {state.mode === 'item' && <ItemPicker />}
       {state.mode === 'structure' && <StructurePicker />}
+      <ConnectionToggle />
       {state.mode === 'mobs' && <MobPicker />}
       {state.mode === 'trees' && <TreePicker />}
       <PreviewScene />

@@ -81,3 +81,9 @@ export interface VoxelGrid {
  * exact geometry and the reasoning behind each approximation.
  */
 export type BlockShape = 'full_cube' | 'slab' | 'stair' | 'door';
+
+/** How fences, panes/bars, walls and redstone wire get their connections (see
+ *  lib/structure/connections.ts): `stored` keeps a structure's real saved properties (an item's
+ *  bare default), `auto` recomputes them from the neighboring blocks, `all` forces every side
+ *  connected, `none` forces every side open. */
+export type ConnectionMode = 'stored' | 'auto' | 'all' | 'none';

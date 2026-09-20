@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppState } from '../state/AppContext';
 import { buildItemVoxelGrid } from '../lib/models/buildItemVoxelGrid';
+import { itemConnectionProperties } from '../lib/structure/connections';
 import { loadAndDecodeEntityTexture, loadAndDecodeTexture } from '../lib/zip/decodeTexture';
 
 export function ItemPicker() {
@@ -70,7 +71,8 @@ export function ItemPicker() {
           state.modelFiles!,
           decodeTexture,
           state.palette!,
-          state.resolution
+          state.resolution,
+          { properties: itemConnectionProperties(itemName, state.connectionMode) }
         );
         if (!cancelled) dispatch({ type: 'ITEM_VOXELIZED', itemVoxelGrid });
       } catch (err) {
@@ -87,6 +89,7 @@ export function ItemPicker() {
   }, [
     state.selectedItemName,
     state.resolution,
+    state.connectionMode,
     state.blockStateFiles,
     state.modelFiles,
     state.blockTextureFiles,
@@ -131,7 +134,8 @@ export function ItemPicker() {
       </div>
       <p className="mt-1.5 text-center text-xs text-slate-600">
         Item mode (beta) — voxelized from the block's real 3D model, not its flat texture. Most simple JSON-model
-        blocks work; blocks whose shape depends on neighbors (fences, panes, walls) render just their fixed part.
+        blocks work. Fences, panes, bars, walls and redstone wire have no neighbors here, so use the connections
+        control below to show them connected or isolated.
       </p>
 
       {isOpen && filtered.length > 0 && (
