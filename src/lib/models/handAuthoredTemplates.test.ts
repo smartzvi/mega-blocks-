@@ -154,8 +154,13 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
           'minecraft:stripped_spruce_log',
         ]);
       }
-      // Only the mattress (0) is unrestricted — it keeps the full shared palette for its dyed color.
-      expect(bed.elementPaletteRestrictions?.[0]).toBeUndefined();
+      // The mattress (0) is restricted to wool/concrete/terracotta of every dye — regression test
+      // for real user feedback that large beds contained crimson_stem (its darker shading pixels
+      // had matched wood at 32³+ while the blanket was unrestricted).
+      const blanket = bed.elementPaletteRestrictions?.[0] ?? [];
+      expect(blanket).toHaveLength(48); // 16 dyes x (wool, concrete, terracotta)
+      expect(blanket).toContain('minecraft:red_concrete');
+      expect(blanket.some((id) => /stem|planks|log|hyphae/.test(id))).toBe(false);
     }
 
     const { elements } = resolveHandAuthoredTemplate('red_bed')!.model;

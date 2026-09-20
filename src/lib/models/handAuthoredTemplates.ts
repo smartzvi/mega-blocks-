@@ -616,6 +616,16 @@ const DYE_COLORS = [
   'black',
 ];
 
+/**
+ * Restricts the mattress/blanket (index 0) to dyed fabric-like blocks: wool, concrete and
+ * terracotta in every dye color. The blanket used to be unrestricted so its dyed color could match
+ * freely, but at 32³ and up its darker shading pixels had nothing wood-free to land on and matched
+ * `crimson_stem` (red bed, 124-496 blocks by 64³) and `stripped_crimson_stem` (pink) — verified
+ * against the real jar. All 16 dyes stay allowed, not just the bed's own, so the blanket keeps its
+ * real light-to-dark shading instead of flattening to one block.
+ */
+const BED_BLANKET_PALETTE = DYE_COLORS.flatMap((color) => [`minecraft:${color}_wool`, `minecraft:${color}_concrete`, `minecraft:${color}_terracotta`]);
+
 const SIGN_WOODS = [
   'oak',
   'spruce',
@@ -679,6 +689,7 @@ export const HAND_AUTHORED_TEMPLATES: Record<string, HandAuthoredTemplateEntry> 
     DYE_COLORS.map((color) => [
       `${color}_bed`,
       template(bedModel(`bed/${color}`), 32, {
+        0: BED_BLANKET_PALETTE,
         1: BED_PILLOW_PALETTE,
         2: BED_LIGHT_OAK_PALETTE,
         3: BED_LIGHT_OAK_PALETTE,
