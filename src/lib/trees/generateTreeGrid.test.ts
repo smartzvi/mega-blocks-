@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateTreeGrid, TREE_SPECIES_NAMES } from './generateTreeGrid';
-import { getVoxel } from '../voxel/voxelGrid';
+import { forEachVoxel, getVoxel } from '../voxel/voxelGrid';
 
 describe('TREE_SPECIES_NAMES', () => {
   it('lists exactly oak and birch, sorted', () => {
@@ -96,15 +96,14 @@ describe('generateTreeGrid', () => {
   it('never places a voxel outside the returned grid bounds', () => {
     for (const species of TREE_SPECIES_NAMES) {
       const { grid } = generateTreeGrid(species);
-      for (const key of grid.voxels.keys()) {
-        const [x, y, z] = key.split(',').map(Number);
+      forEachVoxel(grid, (x, y, z) => {
         expect(x).toBeGreaterThanOrEqual(0);
         expect(x).toBeLessThan(grid.sizeX);
         expect(y).toBeGreaterThanOrEqual(0);
         expect(y).toBeLessThan(grid.sizeY);
         expect(z).toBeGreaterThanOrEqual(0);
         expect(z).toBeLessThan(grid.sizeZ);
-      }
+      });
     }
   });
 });
