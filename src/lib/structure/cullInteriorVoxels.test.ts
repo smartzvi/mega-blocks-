@@ -24,6 +24,27 @@ describe('isNonOccluding', () => {
     expect(isNonOccluding('minecraft:redstone_wire[east=side,north=none,power=0,south=side,west=none]')).toBe(true);
   });
 
+  it('matches the crops, plants, fences, walls and fixtures that sit on a block without covering it', () => {
+    for (const name of [
+      'wheat', 'carrots', 'potatoes', 'beetroots', 'pumpkin_stem', 'attached_melon_stem', 'candle', 'white_candle',
+      'short_grass', 'tall_grass', 'fern', 'large_fern', 'oak_sapling', 'red_tulip', 'potted_poppy', 'oak_fence',
+      'nether_brick_fence', 'cobblestone_wall', 'polished_deepslate_wall', 'repeater', 'comparator', 'vine',
+      'cave_vines', 'lily_pad', 'pointed_dripstone', 'snow', 'nether_wart', 'brown_mushroom', 'red_mushroom',
+      'cactus', 'poppy', 'dandelion', 'oxeye_daisy', 'dead_bush',
+    ]) {
+      expect(isNonOccluding(`minecraft:${name}`), name).toBe(true);
+    }
+  });
+
+  it('keeps full blocks that merely share a name with those occluding (snow_block, *_block mushrooms, nether stems, wart block)', () => {
+    for (const name of [
+      'snow_block', 'powder_snow', 'nether_wart_block', 'red_mushroom_block', 'brown_mushroom_block', 'mushroom_stem',
+      'crimson_stem', 'stripped_warped_stem', 'grass_block', 'hay_block', 'oak_stairs', 'oak_slab', 'water', 'lava',
+    ]) {
+      expect(isNonOccluding(`minecraft:${name}`), name).toBe(false);
+    }
+  });
+
   it('does not match ordinary solid blocks', () => {
     expect(isNonOccluding('minecraft:stone')).toBe(false);
     expect(isNonOccluding('minecraft:oak_planks')).toBe(false);

@@ -30,12 +30,56 @@ const NON_OCCLUDING_PATTERNS = [
   // A flat film on top of a block: counting it as solid deleted the block underneath it (39 of 52
   // supports in ancient_city/city_center_3), leaving the wire floating over a hole.
   'redstone_wire',
+  // More things that sit ON a block without covering it. A scan of every bundled structure found
+  // 865 blocks deleted from under exactly these (wheat 186, candles 135, short grass 74, snow
+  // layers 71, fences 78, repeaters/comparators 48, stems 45, walls 43, ...), leaving a crop,
+  // post or plant floating over a hole. Only patterns that can't also match a full block are
+  // here; the ones that can (snow vs snow_block, ...) are in NON_OCCLUDING_EXACT below.
+  'wheat',
+  'carrots',
+  'potatoes',
+  'beetroots',
+  '_stem', // melon/pumpkin stems and attached_* — but not crimson/warped stems, see isNonOccluding
+  'candle',
+  'short_grass',
+  'tall_grass',
+  'fern',
+  'sapling',
+  'tulip',
+  'potted_',
+  'fence', // plain fences too, not just gates
+  '_wall', // cobblestone_wall, brick_wall, ... (wall_torch/_wall_sign were already covered)
+  'repeater',
+  'comparator',
+  'vine',
+  'lily_pad',
+  'pointed_dripstone',
 ];
+
+// Names that would also match a full block as a substring (snow_block, nether_wart_block,
+// red_mushroom_block, ...), so they are matched whole instead.
+const NON_OCCLUDING_EXACT = new Set([
+  'snow',
+  'nether_wart',
+  'brown_mushroom',
+  'red_mushroom',
+  'cactus',
+  'poppy',
+  'dandelion',
+  'oxeye_daisy',
+  'dead_bush',
+]);
+
+// `_stem` also ends the full blocks crimson_stem/warped_stem (and their stripped forms) and
+// mushroom_stem, which must keep occluding.
+const FULL_STEM_BLOCKS = /(^|_)(crimson|warped|mushroom)_stem$/;
 
 export function isNonOccluding(blockId: string): boolean {
   // blockId may be a full blockstate key (Name[prop=val,...], see blockstateKey.ts) — strip the
   // property suffix first so a property *value* can never accidentally substring-match a pattern.
   const bareName = blockId.split('[')[0].replace('minecraft:', '');
+  if (NON_OCCLUDING_EXACT.has(bareName)) return true;
+  if (FULL_STEM_BLOCKS.test(bareName)) return false;
   return NON_OCCLUDING_PATTERNS.some((pattern) => bareName.includes(pattern));
 }
 
