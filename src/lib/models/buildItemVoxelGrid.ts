@@ -7,6 +7,7 @@ import { filterPaletteForSource } from '../palette/glassSource';
 import { filterLightSourcesForSource } from '../palette/lightSourceExclusion';
 import { filterPaletteForLeafSource } from '../palette/leafSource';
 import { filterPaletteForOreSource } from '../palette/oreSource';
+import { filterPaletteForRedstoneSource } from '../palette/redstoneSource';
 import { detectTextureTintRgb, tintTexture } from '../palette/tint';
 
 type FileLoaderMap = Map<string, () => Promise<Uint8Array>>;
@@ -118,7 +119,7 @@ export async function buildItemVoxelGrid(
     [...neededKeys].map(async (key) => {
       const tex = await decodeTexture(key);
       if (!tex) return;
-      const tintRgb = detectTextureTintRgb(key);
+      const tintRgb = detectTextureTintRgb(key, options?.properties);
       textures.set(key, tintRgb ? tintTexture(tex, tintRgb) : tex);
     })
   );
@@ -127,9 +128,12 @@ export async function buildItemVoxelGrid(
     throw new Error(`Couldn't decode any texture referenced by "${itemName}"'s model.`);
   }
 
-  const effectivePalette = filterPaletteForOreSource(
-    filterPaletteForLeafSource(
-      filterLightSourcesForSource(filterPaletteForSource(palette, itemName), itemName),
+  const effectivePalette = filterPaletteForRedstoneSource(
+    filterPaletteForOreSource(
+      filterPaletteForLeafSource(
+        filterLightSourcesForSource(filterPaletteForSource(palette, itemName), itemName),
+        itemName
+      ),
       itemName
     ),
     itemName

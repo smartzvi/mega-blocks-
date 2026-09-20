@@ -27,6 +27,9 @@ const NON_OCCLUDING_PATTERNS = [
   'button',
   'pressure_plate',
   'carpet',
+  // A flat film on top of a block: counting it as solid deleted the block underneath it (39 of 52
+  // supports in ancient_city/city_center_3), leaving the wire floating over a hole.
+  'redstone_wire',
 ];
 
 export function isNonOccluding(blockId: string): boolean {

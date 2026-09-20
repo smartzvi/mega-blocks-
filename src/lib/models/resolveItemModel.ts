@@ -28,6 +28,17 @@ async function loadRawBlockState(name: string, blockStateFiles: FileLoaderMap): 
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+/**
+ * Item mode picks a bare block name with no real instance, so a fully-conditional multipart
+ * blockstate falls back to applying EVERY part (see resolveBlockStateModelRefs). For redstone wire
+ * that meant the dot, all four flat arms and all four vertical `up` climb pieces at once — a
+ * cluster of floating vertical fragments. A flat four-way cross is the recognizable connected
+ * shape a placed wire actually has, so item mode resolves it with those properties instead.
+ */
+const ITEM_MODE_DEFAULT_PROPERTIES: Record<string, Record<string, string>> = {
+  redstone_wire: { north: 'side', east: 'side', south: 'side', west: 'side' },
+};
+
 /** Iron/copper bars' part models (`*_bars_side`, `*_bars_side_alt`, ...). */
 const BARS_PART_MODEL = /bars_(?:post|side|cap)/;
 
@@ -128,7 +139,7 @@ export async function resolveItemModel(
     }
   }
 
-  const refs = resolveBlockStateModelRefs(rawState, itemName, properties);
+  const refs = resolveBlockStateModelRefs(rawState, itemName, properties ?? ITEM_MODE_DEFAULT_PROPERTIES[itemName]);
   const parts = await Promise.all(refs.map((ref) => resolveSingleRef(ref, modelFiles)));
 
   const elements = parts.flatMap((p) => p.elements);

@@ -9,6 +9,42 @@ function fakeFiles(files: Record<string, unknown>) {
   return map;
 }
 
+describe('resolveItemModel — redstone wire', () => {
+  // Trimmed slice of the real redstone_wire.json: every part is conditional.
+  const wireFiles = () => ({
+    blockStates: fakeFiles({
+      redstone_wire: {
+        multipart: [
+          { apply: { model: 'minecraft:block/dot' }, when: { OR: [{ east: 'none', north: 'none', south: 'none', west: 'none' }, { east: 'side|up', north: 'side|up' }] } },
+          { apply: { model: 'minecraft:block/side' }, when: { north: 'side|up' } },
+          { apply: { model: 'minecraft:block/side', y: 90 }, when: { east: 'side|up' } },
+          { apply: { model: 'minecraft:block/up' }, when: { north: 'up' } },
+        ],
+      },
+    }),
+    models: fakeFiles({
+      dot: { textures: { line: 'minecraft:block/redstone_dust_dot' }, elements: [{ from: [0, 0.25, 0], to: [16, 0.25, 16], faces: { up: { uv: [0, 0, 16, 16], texture: '#line' } } }] },
+      side: { textures: { line: 'minecraft:block/redstone_dust_line0' }, elements: [{ from: [0, 0.25, 0], to: [16, 0.25, 8], faces: { up: { uv: [0, 0, 16, 8], texture: '#line' } } }] },
+      up: { textures: { line: 'minecraft:block/redstone_dust_line0' }, elements: [{ from: [0, 0, 0.25], to: [16, 16, 0.25], faces: { south: { uv: [0, 0, 16, 16], texture: '#line' } } }] },
+    }),
+  });
+
+  it('with no properties (item mode) resolves a flat four-way cross, not every part including the vertical climb pieces', async () => {
+    const { blockStates, models } = wireFiles();
+    const resolved = await resolveItemModel('redstone_wire', blockStates, models);
+    // dot (adjacent sides connect) + north arm + east arm; the `up` climb piece is NOT included
+    expect(resolved.model.elements).toHaveLength(3);
+    const climbs = resolved.model.elements.filter((el) => el.to[1] - el.from[1] > 1);
+    expect(climbs).toHaveLength(0);
+  });
+
+  it('with real properties, honors them instead of the item-mode default', async () => {
+    const { blockStates, models } = wireFiles();
+    const resolved = await resolveItemModel('redstone_wire', blockStates, models, { north: 'up', east: 'none', south: 'none', west: 'none' });
+    expect(resolved.model.elements.some((el) => el.to[1] - el.from[1] > 1)).toBe(true); // the climb piece
+  });
+});
+
 describe('resolveItemModel — iron bars', () => {
   // Structure of the real template_bars_side.json: a flat pane, a volumetric one-face "edge cap"
   // box, and flat top/bottom rims.

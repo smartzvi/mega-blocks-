@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyTint, detectTextureTintRgb, detectTint, tintTexture } from './tint';
+import { applyTint, detectTextureTintRgb, detectTint, redstoneWireTintRgb, tintTexture } from './tint';
 import type { BlockTextureSet, FaceTexture } from '../../types/minecraft';
 
 function solidTexture(r: number, g: number, b: number, a = 255): FaceTexture {
@@ -38,6 +38,28 @@ describe('applyTint', () => {
     for (const face of Object.values(result)) {
       expect(face.data[0]).toBeLessThan(200); // darkened by the tint multiply
     }
+  });
+});
+
+describe('redstone wire tint', () => {
+  it("reproduces the game's color for each power level: dark red unpowered, bright red at 15, green only at high power, never blue", () => {
+    expect(redstoneWireTintRgb(0)).toEqual([77, 0, 0]);
+    expect(redstoneWireTintRgb(15)).toEqual([255, 51, 0]);
+    expect(redstoneWireTintRgb(8)).toEqual([184, 0, 0]);
+    for (let p = 0; p <= 15; p++) expect(redstoneWireTintRgb(p)[2]).toBe(0);
+  });
+
+  it('tints the three wire textures by the block\'s real power, and defaults to fully powered with no properties', () => {
+    for (const key of ['redstone_dust_dot', 'redstone_dust_line0', 'redstone_dust_line1']) {
+      expect(detectTextureTintRgb(key, { power: '0' })).toEqual([77, 0, 0]);
+      expect(detectTextureTintRgb(key, { power: '12' })).toEqual(redstoneWireTintRgb(12));
+      expect(detectTextureTintRgb(key)).toEqual([255, 51, 0]);
+      expect(detectTextureTintRgb(key, { power: 'garbage' })).toEqual([255, 51, 0]);
+    }
+  });
+
+  it('leaves the transparent overlay texture untinted', () => {
+    expect(detectTextureTintRgb('redstone_dust_overlay')).toBeNull();
   });
 });
 

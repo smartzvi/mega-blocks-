@@ -21,6 +21,7 @@ describe('isNonOccluding', () => {
     expect(isNonOccluding('minecraft:oak_fence_gate')).toBe(true);
     expect(isNonOccluding('minecraft:torch')).toBe(true);
     expect(isNonOccluding('minecraft:iron_bars')).toBe(true);
+    expect(isNonOccluding('minecraft:redstone_wire[east=side,north=none,power=0,south=side,west=none]')).toBe(true);
   });
 
   it('does not match ordinary solid blocks', () => {

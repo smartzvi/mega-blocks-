@@ -72,6 +72,35 @@ const LEAF_TINT_OVERRIDES: Record<string, [number, number, number]> = {
 // `detectTint` already gives cherry_leaves.
 const UNTINTED_LEAVES = new Set(['cherry_leaves', 'azalea_leaves', 'flowering_azalea_leaves']);
 
+// The three tinted redstone wire textures (`tintindex: 0` in the real redstone_dust_* models). They
+// are near-white in the jar (values 217-254) and colored at runtime by the wire's `power`, so
+// without a tint they matched white wool/concrete. `redstone_dust_overlay` is fully transparent
+// and untinted in the real models, so it is deliberately not listed.
+const REDSTONE_WIRE_TEXTURES = new Set(['redstone_dust_dot', 'redstone_dust_line0', 'redstone_dust_line1']);
+
+// Item mode has no real block instance, so no `power`: use the fully powered color, i.e. the
+// recognizable bright red, rather than the near-black unpowered one.
+const DEFAULT_WIRE_POWER = 15;
+
+function parseWirePower(properties?: Record<string, string>): number {
+  const power = Number.parseInt(properties?.power ?? '', 10);
+  return Number.isNaN(power) ? DEFAULT_WIRE_POWER : Math.min(15, Math.max(0, power));
+}
+
+/**
+ * The game's wire color for a given power level (RedStoneWireBlock's per-power color table):
+ * red rises from 0.3 (unpowered, dark red) to 1.0, green only appears at high power (0.2 at 15),
+ * blue never does. Reproduced from the client's known formula rather than read from the jar,
+ * because it lives in compiled code, not an asset.
+ */
+export function redstoneWireTintRgb(power: number): [number, number, number] {
+  const f = Math.min(15, Math.max(0, power)) / 15;
+  const r = f * 0.6 + (f > 0 ? 0.4 : 0.3);
+  const g = Math.min(1, Math.max(0, f * f * 0.7 - 0.5));
+  const b = Math.min(1, Math.max(0, f * f * 0.6 - 0.7));
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
 /**
  * Like `detectTint`, but keyed by a texture file path's bare key (e.g. "birch_leaves") rather
  * than a whole block name, and returning a direct RGB multiplier rather than one of
@@ -85,7 +114,8 @@ const UNTINTED_LEAVES = new Set(['cherry_leaves', 'azalea_leaves', 'flowering_az
  * through to the shared foliage approximation like oak/jungle/acacia/dark_oak/mangrove, which is
  * closer to correct than leaving it untinted grayscale (the original "looks like stone" bug).
  */
-export function detectTextureTintRgb(textureKey: string): [number, number, number] | null {
+export function detectTextureTintRgb(textureKey: string, properties?: Record<string, string>): [number, number, number] | null {
+  if (REDSTONE_WIRE_TEXTURES.has(textureKey)) return redstoneWireTintRgb(parseWirePower(properties));
   if (UNTINTED_LEAVES.has(textureKey)) return null;
   if (textureKey in LEAF_TINT_OVERRIDES) return LEAF_TINT_OVERRIDES[textureKey];
   if (textureKey.endsWith('_leaves') || textureKey === 'vine') return TINT_RGB.foliage;
