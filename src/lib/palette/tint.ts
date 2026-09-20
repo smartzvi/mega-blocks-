@@ -124,6 +124,42 @@ export function redstoneWireTintRgb(power: number): [number, number, number] {
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
+// Leaf litter is colored by the biome DRY FOLIAGE colormap. Sampled from the jar's own
+// `colormap/dry_foliage.png` at the plains coordinates (temperature 0.8, downfall 0.4) — the same
+// method reproduces this file's plains grass (#91bd59) and foliage (#77ab2f) constants exactly
+// when applied to `colormap/grass.png` / `foliage.png`, which is what validates it.
+const DRY_FOLIAGE_RGB: [number, number, number] = [0xa3, 0x75, 0x46];
+
+// Water cauldron water is colored with the biome's `water_color`; plains' is `#3f76e4`, read
+// directly from the jar's `data/minecraft/worldgen/biome/plains.json`. `water_still` is only ever
+// tinted through the water cauldron model, so tinting the texture key is safe. Lava and powder
+// snow cauldrons reuse the same template but the game gives them no tint, and their own textures
+// (`lava_still`, `powder_snow`) are not listed here.
+const WATER_RGB: [number, number, number] = [0x3f, 0x76, 0xe4];
+
+// Melon/pumpkin stems are recolored per growth stage (`age` 0-7) from bright green to
+// yellow-brown, and attached stems use one fixed color. The per-age formula is the game's, from
+// compiled code rather than an asset (so, unlike the colormaps above, not checkable against the
+// jar): (age*32, 255-age*8, age*4). The fixed attached color, 0xE0C71C, is exactly that formula's
+// value at age 7 — an independent cross-check between the two.
+const STEM_TEXTURES = new Set(['melon_stem', 'pumpkin_stem']);
+const ATTACHED_STEM_TEXTURES = new Set(['attached_melon_stem', 'attached_pumpkin_stem']);
+const ATTACHED_STEM_RGB: [number, number, number] = [0xe0, 0xc7, 0x1c];
+
+// Item mode picks a stem with no real instance, and the variant it resolves is age=0 (the first
+// key — a short young stem), so its tint is age 0 too, keeping model and color consistent.
+const DEFAULT_STEM_AGE = 0;
+
+export function stemTintRgb(age: number): [number, number, number] {
+  const a = Math.min(7, Math.max(0, age));
+  return [a * 32, 255 - a * 8, a * 4];
+}
+
+function parseStemAge(properties?: Record<string, string>): number {
+  const age = Number.parseInt(properties?.age ?? '', 10);
+  return Number.isNaN(age) ? DEFAULT_STEM_AGE : age;
+}
+
 /**
  * Like `detectTint`, but keyed by a texture file path's bare key (e.g. "birch_leaves") rather
  * than a whole block name, and returning a direct RGB multiplier rather than one of
@@ -137,10 +173,21 @@ export function redstoneWireTintRgb(power: number): [number, number, number] {
  * through to the shared foliage approximation like oak/jungle/acacia/dark_oak/mangrove, which is
  * closer to correct than leaving it untinted grayscale (the original "looks like stone" bug).
  */
-export function detectTextureTintRgb(textureKey: string, properties?: Record<string, string>): [number, number, number] | null {
+export function detectTextureTintRgb(
+  textureKey: string,
+  properties?: Record<string, string>,
+  blockName?: string
+): [number, number, number] | null {
   if (REDSTONE_WIRE_TEXTURES.has(textureKey)) return redstoneWireTintRgb(parseWirePower(properties));
   if (GRASS_TINTED_TEXTURES.has(textureKey)) return TINT_RGB.grass;
   if (textureKey === 'lily_pad') return LILY_PAD_RGB;
+  if (textureKey === 'leaf_litter') return DRY_FOLIAGE_RGB;
+  if (textureKey === 'water_still') return WATER_RGB;
+  if (ATTACHED_STEM_TEXTURES.has(textureKey)) return ATTACHED_STEM_RGB;
+  // An attached stem's model also reuses the plain stem texture; the block name tells them apart.
+  if (STEM_TEXTURES.has(textureKey)) {
+    return blockName?.replace(/^minecraft:/, '').startsWith('attached_') ? ATTACHED_STEM_RGB : stemTintRgb(parseStemAge(properties));
+  }
   if (UNTINTED_LEAVES.has(textureKey)) return null;
   if (textureKey in LEAF_TINT_OVERRIDES) return LEAF_TINT_OVERRIDES[textureKey];
   if (textureKey.endsWith('_leaves') || textureKey === 'vine') return TINT_RGB.foliage;

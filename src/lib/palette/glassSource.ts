@@ -1,5 +1,6 @@
 import type { PaletteEntry } from '../../types/minecraft';
 import { isEarthFamilySource } from './earthSource';
+import { isPlantSource } from './plantSource';
 import { isWoodFamilySource } from './lightSourceExclusion';
 
 /**
@@ -36,5 +37,6 @@ export function filterPaletteForSource(palette: PaletteEntry[], sourceName: stri
   // A soil texture is brown noise, and the nearest palette blocks to it by raw color are wood
   // planks and logs — confirmed against the real jar: `dirt` came out ~45% jungle/spruce wood. For
   // earth-family sources wood is the wrong material, so it's dropped (as wood_earth is for ores).
-  return allowEarth ? palette.filter((entry) => !isWoodFamilySource(entry.id)) : palette;
+  // The same goes for the yellow-brown plant sources (leaf litter, mature stems — plantSource.ts).
+  return allowEarth || isPlantSource(sourceName) ? palette.filter((entry) => !isWoodFamilySource(entry.id)) : palette;
 }

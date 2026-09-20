@@ -1,5 +1,6 @@
 import type { PaletteEntry } from '../../types/minecraft';
 import { isEarthFamilySource } from './earthSource';
+import { isPlantSource } from './plantSource';
 
 /**
  * Whether a source block/item name is a diamond variant (diamond_block, diamond_ore,
@@ -121,6 +122,7 @@ export function filterLightSourcesForSource(palette: PaletteEntry[], sourceName:
     !isWoodFamilySource(sourceName) &&
     !isDirtFamilySource(sourceName) &&
     !isEarthFamilySource(sourceName) &&
+    !isPlantSource(sourceName) &&
     !isBedFamilySource(sourceName) &&
     !isExactNameExcluded(sourceName)
   ) {

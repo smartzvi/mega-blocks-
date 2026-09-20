@@ -119,7 +119,7 @@ export async function buildItemVoxelGrid(
     [...neededKeys].map(async (key) => {
       const tex = await decodeTexture(key);
       if (!tex) return;
-      const tintRgb = detectTextureTintRgb(key, options?.properties);
+      const tintRgb = detectTextureTintRgb(key, options?.properties, itemName);
       textures.set(key, tintRgb ? tintTexture(tex, tintRgb) : tex);
     })
   );

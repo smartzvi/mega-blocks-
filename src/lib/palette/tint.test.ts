@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyTint, detectTextureTintRgb, detectTint, redstoneWireTintRgb, tintTexture } from './tint';
+import { applyTint, detectTextureTintRgb, detectTint, redstoneWireTintRgb, stemTintRgb, tintTexture } from './tint';
 import type { BlockTextureSet, FaceTexture } from '../../types/minecraft';
 
 function solidTexture(r: number, g: number, b: number, a = 255): FaceTexture {
@@ -98,6 +98,43 @@ describe('grass tint', () => {
     expect(detectTextureTintRgb('grass_block_side')).toBeNull();
     expect(detectTextureTintRgb('dirt')).toBeNull();
     expect(detectTextureTintRgb('grass_block_snow')).toBeNull();
+  });
+});
+
+describe('stem, leaf litter and water cauldron tints', () => {
+  it("colors stems per growth age from bright green to yellow-brown, using the game's formula", () => {
+    expect(stemTintRgb(0)).toEqual([0, 255, 0]);
+    expect(stemTintRgb(3)).toEqual([96, 231, 12]);
+    expect(stemTintRgb(7)).toEqual([224, 199, 28]);
+    expect(stemTintRgb(99)).toEqual(stemTintRgb(7)); // clamps
+  });
+
+  it("the attached-stem constant equals the formula's age-7 value (an independent cross-check)", () => {
+    expect(detectTextureTintRgb('attached_melon_stem')).toEqual(stemTintRgb(7));
+    expect(detectTextureTintRgb('attached_pumpkin_stem')).toEqual([0xe0, 0xc7, 0x1c]);
+  });
+
+  it("tints melon/pumpkin stem textures by the block's real age, defaulting to age 0 (the model item mode resolves)", () => {
+    expect(detectTextureTintRgb('melon_stem', { age: '5' })).toEqual(stemTintRgb(5));
+    expect(detectTextureTintRgb('pumpkin_stem', { age: '7' })).toEqual(stemTintRgb(7));
+    expect(detectTextureTintRgb('melon_stem')).toEqual([0, 255, 0]);
+    expect(detectTextureTintRgb('melon_stem', { age: 'x' })).toEqual([0, 255, 0]);
+  });
+
+  it('an attached stem block uses the fixed color even for the plain stem texture its model reuses', () => {
+    expect(detectTextureTintRgb('melon_stem', undefined, 'attached_melon_stem')).toEqual([0xe0, 0xc7, 0x1c]);
+    expect(detectTextureTintRgb('pumpkin_stem', { age: '2' }, 'minecraft:attached_pumpkin_stem')).toEqual([0xe0, 0xc7, 0x1c]);
+    expect(detectTextureTintRgb('melon_stem', { age: '2' }, 'melon_stem')).toEqual(stemTintRgb(2));
+  });
+
+  it("tints leaf litter with plains dry foliage and cauldron water with plains' water color, both read from the jar", () => {
+    expect(detectTextureTintRgb('leaf_litter')).toEqual([0xa3, 0x75, 0x46]);
+    expect(detectTextureTintRgb('water_still')).toEqual([0x3f, 0x76, 0xe4]);
+  });
+
+  it('leaves lava and powder snow (which the game does not tint in a cauldron) alone', () => {
+    expect(detectTextureTintRgb('lava_still')).toBeNull();
+    expect(detectTextureTintRgb('powder_snow')).toBeNull();
   });
 });
 

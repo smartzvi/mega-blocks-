@@ -89,6 +89,12 @@ describe('filterLightSourcesForSource', () => {
     expect(filterLightSourcesForSource(palette, 'birch_log')).toEqual([stone]);
   });
 
+  it('strips lightSource entries for leaf litter and stems (glowstone showed up in dry leaf litter)', () => {
+    for (const name of ['leaf_litter', 'melon_stem', 'attached_pumpkin_stem']) {
+      expect(filterLightSourcesForSource(palette, name)).toEqual([stone]);
+    }
+  });
+
   it('strips lightSource entries for every earth-family source, not just ones named "dirt" (grass_block, farmland, podzol used to pull in glowstone)', () => {
     for (const name of ['grass_block', 'farmland', 'podzol', 'mycelium', 'dirt_path']) {
       expect(filterLightSourcesForSource(palette, name)).toEqual([stone]);
