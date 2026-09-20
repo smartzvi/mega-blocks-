@@ -135,9 +135,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       // need to clear matchedFaces here.
       return { ...state, shape: action.shape };
     case 'CONNECTION_MODE_CHANGED':
-      // Connections change which blockstates get voxelized, so item/structure output must rebuild
-      // (their picker effects re-run on this state); block/mob/tree output has no connecting blocks.
-      return { ...state, connectionMode: action.connectionMode, itemVoxelGrid: null, structureVoxelGrid: null };
+      // Item mode only: the picked fence/pane/wall rebuilds (ItemPicker's effect re-runs on this).
+      return { ...state, connectionMode: action.connectionMode, itemVoxelGrid: null };
     case 'MODE_CHANGED':
       return { ...state, mode: action.mode };
     case 'ITEM_VOXELIZING':

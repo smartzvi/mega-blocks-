@@ -28,9 +28,13 @@ function Workspace() {
           <ShapeSelector />
         </>
       )}
-      {state.mode === 'item' && <ItemPicker />}
+      {state.mode === 'item' && (
+        <>
+          <ItemPicker />
+          <ConnectionToggle />
+        </>
+      )}
       {state.mode === 'structure' && <StructurePicker />}
-      <ConnectionToggle />
       {state.mode === 'mobs' && <MobPicker />}
       {state.mode === 'trees' && <TreePicker />}
       <PreviewScene />

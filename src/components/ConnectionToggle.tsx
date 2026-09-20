@@ -1,44 +1,38 @@
 import { useAppDispatch, useAppState } from '../state/AppContext';
 import type { ConnectionMode } from '../types/minecraft';
+import { connectionFamily } from '../lib/models/itemConnections';
 
-type Option = { value: ConnectionMode; label: string; hint: string };
-
-// Item mode has no neighboring blocks, so "auto" would be identical to the default there and is
-// left out; Structure mode gets all four.
-const ITEM_OPTIONS: Option[] = [
+const OPTIONS: { value: ConnectionMode; label: string; hint: string }[] = [
   { value: 'stored', label: 'Default', hint: 'The block as it comes, with no connections.' },
   { value: 'all', label: 'All connected', hint: 'Every side connected.' },
   { value: 'none', label: 'Isolated', hint: 'Every side open.' },
 ];
 
-const STRUCTURE_OPTIONS: Option[] = [
-  { value: 'stored', label: 'As built', hint: "Keep each block's connections exactly as the structure file saved them." },
-  { value: 'auto', label: 'Auto-connect', hint: 'Recompute fences, panes, bars and walls from their neighbors. Redstone wire keeps its saved connections.' },
-  { value: 'all', label: 'All connected', hint: 'Force every fence, pane, bar, wall and wire side connected.' },
-  { value: 'none', label: 'Isolated', hint: 'Force every side open.' },
-];
-
+/**
+ * Shown only in Item mode, and only while the picked block is itself a fence, glass pane, bars,
+ * wall or redstone wire — the blocks whose shape depends on neighbors an item doesn't have.
+ * Structure mode deliberately has no such control: a structure's blocks keep the connections its
+ * file saved.
+ */
 export function ConnectionToggle() {
   const state = useAppState();
   const dispatch = useAppDispatch();
 
-  if (state.status !== 'ready' || (state.mode !== 'item' && state.mode !== 'structure')) return null;
+  if (state.status !== 'ready' || state.mode !== 'item') return null;
+  if (state.selectedItemName === null || connectionFamily(state.selectedItemName) === null) return null;
 
-  const options = state.mode === 'item' ? ITEM_OPTIONS : STRUCTURE_OPTIONS;
-  // "Auto" only exists in Structure mode; switching to Item mode while it's selected behaves as the default.
-  const current = state.mode === 'item' && state.connectionMode === 'auto' ? 'stored' : state.connectionMode;
-  const hint = options.find((o) => o.value === current)?.hint;
+  const hint = OPTIONS.find((o) => o.value === state.connectionMode)?.hint;
 
   return (
     <div className="flex w-full flex-col items-center gap-2">
-      <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Fence / pane / wall connections</span>
+      <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Connections</span>
       <div
         role="radiogroup"
         aria-label="Connections"
         className="inline-flex flex-wrap justify-center gap-1 rounded-full border border-slate-800 bg-slate-900/60 p-1 shadow-inner shadow-black/20"
       >
-        {options.map((opt) => {
-          const active = current === opt.value;
+        {OPTIONS.map((opt) => {
+          const active = state.connectionMode === opt.value;
           return (
             <button
               key={opt.value}

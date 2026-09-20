@@ -85,8 +85,7 @@ export interface VoxelGrid {
  */
 export type BlockShape = 'full_cube' | 'slab' | 'stair' | 'door';
 
-/** How fences, panes/bars, walls and redstone wire get their connections (see
- *  lib/structure/connections.ts): `stored` keeps a structure's real saved properties (an item's
- *  bare default), `auto` recomputes them from the neighboring blocks, `all` forces every side
- *  connected, `none` forces every side open. */
-export type ConnectionMode = 'stored' | 'auto' | 'all' | 'none';
+/** How a fence, pane/bars, wall or redstone wire picked in Item mode gets its connections (see
+ *  lib/models/itemConnections.ts): `stored` is the block's bare default, `all` connects every
+ *  side, `none` leaves every side open. Structure mode has no such setting. */
+export type ConnectionMode = 'stored' | 'all' | 'none';
