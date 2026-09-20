@@ -63,6 +63,44 @@ describe('redstone wire tint', () => {
   });
 });
 
+describe('grass tint', () => {
+  it('applies the default grass tint to every grass-colormap texture the real models tint', () => {
+    const grass = [0x91, 0xbd, 0x59];
+    for (const key of [
+      'grass_block_top',
+      'grass_block_side_overlay',
+      'short_grass',
+      'tall_grass_top',
+      'tall_grass_bottom',
+      'fern',
+      'large_fern_top',
+      'large_fern_bottom',
+      'sugar_cane',
+      'bush',
+      'pink_petals_stem',
+      'wildflowers_stem',
+    ]) {
+      expect(detectTextureTintRgb(key)).toEqual(grass);
+    }
+  });
+
+  it('matches the tint Block mode already applies to grass_block, so both modes agree', () => {
+    const grass = detectTextureTintRgb('grass_block_top')!;
+    const blockMode = applyTint({ top: solidTexture(255, 255, 255) } as BlockTextureSet, 'grass').top;
+    expect([blockMode.data[0], blockMode.data[1], blockMode.data[2]]).toEqual(grass);
+  });
+
+  it('gives lily pads the game\'s fixed color, not the grass colormap', () => {
+    expect(detectTextureTintRgb('lily_pad')).toEqual([0x20, 0x80, 0x30]);
+  });
+
+  it('does not tint the plain dirt side of grass_block or unrelated blocks', () => {
+    expect(detectTextureTintRgb('grass_block_side')).toBeNull();
+    expect(detectTextureTintRgb('dirt')).toBeNull();
+    expect(detectTextureTintRgb('grass_block_snow')).toBeNull();
+  });
+});
+
 describe('detectTextureTintRgb', () => {
   it('returns the real fixed hardcoded colors for spruce/birch leaves, not the shared foliage approximation — confirmed via minecraft.wiki/w/Leaves', () => {
     expect(detectTextureTintRgb('spruce_leaves')).toEqual([0x61, 0x99, 0x61]);

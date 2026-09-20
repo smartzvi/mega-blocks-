@@ -72,6 +72,29 @@ const LEAF_TINT_OVERRIDES: Record<string, [number, number, number]> = {
 // `detectTint` already gives cherry_leaves.
 const UNTINTED_LEAVES = new Set(['cherry_leaves', 'azalea_leaves', 'flowering_azalea_leaves']);
 
+// Textures the real models mark `tintindex: 0` and the game colors with the biome GRASS colormap —
+// read from the jar's model JSON (every tinted block was enumerated, not guessed). They are stored
+// grayscale, so without this the voxelizer matched them to stone/andesite/smooth stone: a
+// grass_block top came out gray, ferns and tall grass came out as rock. Uses the same default
+// plains grass color (TINT_RGB.grass) Block mode already uses for grass_block.
+const GRASS_TINTED_TEXTURES = new Set([
+  'grass_block_top',
+  'grass_block_side_overlay',
+  'short_grass',
+  'tall_grass_top',
+  'tall_grass_bottom',
+  'fern',
+  'large_fern_top',
+  'large_fern_bottom',
+  'sugar_cane',
+  'bush',
+  'pink_petals_stem',
+  'wildflowers_stem',
+]);
+
+// The game gives lily pads one fixed color instead of sampling a biome colormap (0x208030).
+const LILY_PAD_RGB: [number, number, number] = [0x20, 0x80, 0x30];
+
 // The three tinted redstone wire textures (`tintindex: 0` in the real redstone_dust_* models). They
 // are near-white in the jar (values 217-254) and colored at runtime by the wire's `power`, so
 // without a tint they matched white wool/concrete. `redstone_dust_overlay` is fully transparent
@@ -116,6 +139,8 @@ export function redstoneWireTintRgb(power: number): [number, number, number] {
  */
 export function detectTextureTintRgb(textureKey: string, properties?: Record<string, string>): [number, number, number] | null {
   if (REDSTONE_WIRE_TEXTURES.has(textureKey)) return redstoneWireTintRgb(parseWirePower(properties));
+  if (GRASS_TINTED_TEXTURES.has(textureKey)) return TINT_RGB.grass;
+  if (textureKey === 'lily_pad') return LILY_PAD_RGB;
   if (UNTINTED_LEAVES.has(textureKey)) return null;
   if (textureKey in LEAF_TINT_OVERRIDES) return LEAF_TINT_OVERRIDES[textureKey];
   if (textureKey.endsWith('_leaves') || textureKey === 'vine') return TINT_RGB.foliage;
