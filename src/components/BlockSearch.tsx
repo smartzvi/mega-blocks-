@@ -6,6 +6,7 @@ import { isFullyOpaque } from '../lib/palette/opacity';
 import { filterPaletteForSource } from '../lib/palette/glassSource';
 import { filterLightSourcesForSource } from '../lib/palette/lightSourceExclusion';
 import { filterPaletteForOreSource } from '../lib/palette/oreSource';
+import { filterPaletteForRedstoneSource } from '../lib/palette/redstoneSource';
 import { filterPaletteForPlanksSource } from '../lib/palette/woodPlanksSource';
 
 export function BlockSearch() {
@@ -58,8 +59,11 @@ export function BlockSearch() {
     const tint = detectTint(state.selectedBlockName);
     const sourceTextures = tint ? applyTint(rawTextures, tint) : rawTextures;
 
-    let palette = filterPaletteForOreSource(
-      filterLightSourcesForSource(filterPaletteForSource(state.palette, state.selectedBlockName), state.selectedBlockName),
+    let palette = filterPaletteForRedstoneSource(
+      filterPaletteForOreSource(
+        filterLightSourcesForSource(filterPaletteForSource(state.palette, state.selectedBlockName), state.selectedBlockName),
+        state.selectedBlockName
+      ),
       state.selectedBlockName
     );
     // filterPaletteForPlanksSource only applies for non-full_cube shapes: a plain full cube shows

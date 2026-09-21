@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterPaletteForRedstoneSource, isRedstoneWireSource } from './redstoneSource';
+import { filterPaletteForRedstoneSource, isRedstoneBlockSource, isRedstoneWireSource } from './redstoneSource';
 import type { PaletteEntry } from '../../types/minecraft';
 
 function fakeEntry(id: string): PaletteEntry {
@@ -23,11 +23,28 @@ describe('isRedstoneWireSource', () => {
   });
 });
 
+describe('isRedstoneBlockSource', () => {
+  it('matches only redstone_block, with or without the namespace', () => {
+    expect(isRedstoneBlockSource('redstone_block')).toBe(true);
+    expect(isRedstoneBlockSource('minecraft:redstone_block')).toBe(true);
+    expect(isRedstoneBlockSource('redstone_ore')).toBe(false);
+    expect(isRedstoneBlockSource('redstone_wire')).toBe(false);
+  });
+});
+
 describe('filterPaletteForRedstoneSource', () => {
   const palette = ['minecraft:red_concrete', 'minecraft:red_wool', 'minecraft:red_terracotta', 'minecraft:orange_concrete', 'minecraft:stripped_mangrove_log'].map(fakeEntry);
 
   it('keeps only the red blocks for redstone wire', () => {
     expect(filterPaletteForRedstoneSource(palette, 'redstone_wire').map((e) => e.id)).toEqual([
+      'minecraft:red_concrete',
+      'minecraft:red_wool',
+      'minecraft:red_terracotta',
+    ]);
+  });
+
+  it('keeps only the red blocks for the redstone block, so no orange frame appears', () => {
+    expect(filterPaletteForRedstoneSource(palette, 'redstone_block').map((e) => e.id)).toEqual([
       'minecraft:red_concrete',
       'minecraft:red_wool',
       'minecraft:red_terracotta',

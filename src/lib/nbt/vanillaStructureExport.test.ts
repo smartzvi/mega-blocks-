@@ -87,3 +87,44 @@ describe('exportVanillaStructureNbt', () => {
     expect(simplified.blocks).toHaveLength(16);
   });
 });
+
+describe('exportVanillaStructureNbt — big builds', () => {
+  it('writes every block of a large grid correctly (positions, states, palette) and stays fast', async () => {
+    const grid = createVoxelGrid(300, 300, 300);
+    const ids = ['minecraft:stone', 'minecraft:oak_planks', 'minecraft:red_wool'];
+    const expected = new Map<string, string>();
+    let n = 0;
+    for (let x = 0; x < 300; x += 4) {
+      for (let y = 0; y < 300; y += 5) {
+        for (let z = 0; z < 300; z += 7) {
+          const id = ids[n++ % 3];
+          setVoxel(grid, x, y, z, id);
+          expected.set(`${x},${y},${z}`, id);
+        }
+      }
+    }
+
+    const start = performance.now(); // ~13k blocks
+    const gzipped = exportVanillaStructureNbt(grid);
+    expect(performance.now() - start).toBeLessThan(5000);
+
+    const { parsed } = await prismarineNbt.parse(Buffer.from(gzipped), 'big');
+    const simplified = prismarineNbt.simplify(parsed) as {
+      size: number[];
+      blocks: { state: number; pos: number[] }[];
+      palette: { Name: string }[];
+    };
+    expect(simplified.size).toEqual([300, 300, 300]);
+    expect(simplified.blocks).toHaveLength(expected.size);
+    for (const b of simplified.blocks) {
+      expect(simplified.palette[b.state].Name).toBe(expected.get(b.pos.join(',')));
+    }
+  });
+
+  it('writes a valid file for an empty grid', async () => {
+    const { parsed } = await prismarineNbt.parse(Buffer.from(exportVanillaStructureNbt(createVoxelGrid(2, 2, 2))), 'big');
+    const simplified = prismarineNbt.simplify(parsed) as { blocks: unknown[]; palette: unknown[] };
+    expect(simplified.blocks).toEqual([]);
+    expect(simplified.palette).toEqual([]);
+  });
+});

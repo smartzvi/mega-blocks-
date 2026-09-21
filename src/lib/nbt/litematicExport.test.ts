@@ -4,6 +4,10 @@ import { exportLitematic } from './litematicExport';
 import { DATA_VERSION } from '../blockstate/dataVersion';
 import type { VoxelGrid } from '../../types/minecraft';
 import { createVoxelGrid, setVoxel } from '../voxel/voxelGrid';
+import { bitsPerEntryFor, unpackLongArray } from './bitpack';
+import { ungzipBytes } from './gzip';
+import { readNbt } from './nbtReader';
+import type { NbtTag } from '../../types/nbt';
 
 function tinyGrid(): VoxelGrid {
   const grid = createVoxelGrid(2, 2, 2);
@@ -106,5 +110,67 @@ describe('exportLitematic', () => {
     expect(simplified.Metadata.TotalVolume).toBe(16);
     expect(simplified.Metadata.EnclosingSize).toEqual({ x: 2, y: 2, z: 4 });
     expect(simplified.Regions.Main.Size).toEqual({ x: 2, y: 2, z: 4 });
+  });
+});
+
+describe('exportLitematic — big builds', () => {
+  it('exports a huge, mostly-empty bounding box that used to throw "Invalid array length"', () => {
+    // 700 x 300 x 700 = 147M cells, the size where the old dense array failed.
+    const grid = createVoxelGrid(700, 300, 700);
+    setVoxel(grid, 0, 0, 0, 'minecraft:stone');
+    setVoxel(grid, 699, 299, 699, 'minecraft:oak_planks');
+    expect(() => exportLitematic(grid, 'Big')).not.toThrow();
+  });
+
+  it('splits a grid over 256 on a side into regions, skips empty ones, and every block reads back in place', async () => {
+    const grid = createVoxelGrid(600, 10, 300);
+    const placed: [number, number, number, string][] = [
+      [0, 0, 0, 'minecraft:stone'],
+      [255, 9, 255, 'minecraft:stone'], // last cell of the first region
+      [256, 0, 0, 'minecraft:oak_planks'], // first cell of the next region along x
+      [599, 5, 299, 'minecraft:red_wool'],
+      [300, 3, 260, 'minecraft:oak_planks'],
+    ];
+    for (const [x, y, z, id] of placed) setVoxel(grid, x, y, z, id);
+
+    const { parsed } = await prismarineNbt.parse(Buffer.from(exportLitematic(grid, 'Split')), 'big');
+    const simplified = prismarineNbt.simplify(parsed) as {
+      Metadata: { RegionCount: number; TotalBlocks: number; EnclosingSize: { x: number; y: number; z: number } };
+      Regions: Record<string, { Position: { x: number; y: number; z: number }; Size: { x: number; y: number; z: number } }>;
+    };
+
+    expect(simplified.Metadata.TotalBlocks).toBe(5);
+    expect(simplified.Metadata.EnclosingSize).toEqual({ x: 600, y: 10, z: 300 });
+    // Regions x-tiles 0,1,2 and z-tiles 0,1 exist; only the four holding blocks are written.
+    expect(Object.keys(simplified.Regions).sort()).toEqual(['Region_0_0_0', 'Region_1_0_0', 'Region_1_0_1', 'Region_2_0_1']);
+    expect(simplified.Metadata.RegionCount).toBe(4);
+    expect(simplified.Regions.Region_2_0_1.Position).toEqual({ x: 512, y: 0, z: 256 });
+    expect(simplified.Regions.Region_2_0_1.Size).toEqual({ x: 88, y: 10, z: 44 }); // clipped to the grid
+
+    // Decode every region with the app's own reader + unpacker and check each block sits at its
+    // original absolute position (and nowhere else).
+    const decoded = new Map<string, string>();
+    const root = readNbt(ungzipBytes(exportLitematic(grid, 'Split'))) as Extract<NbtTag, { type: 'compound' }>;
+    const regions = (root.value.Regions as Extract<NbtTag, { type: 'compound' }>).value;
+    for (const region of Object.values(regions)) {
+      const r = (region as Extract<NbtTag, { type: 'compound' }>).value;
+      const vec = (tag: NbtTag) => (tag as Extract<NbtTag, { type: 'compound' }>).value as Record<string, { value: number }>;
+      const pos = vec(r.Position);
+      const size = vec(r.Size);
+      const names = (r.BlockStatePalette as Extract<NbtTag, { type: 'list' }>).value.map(
+        (t) => ((t as Extract<NbtTag, { type: 'compound' }>).value.Name as { value: string }).value
+      );
+      const volume = size.x.value * size.y.value * size.z.value;
+      const indices = unpackLongArray((r.BlockStates as { value: BigInt64Array }).value, bitsPerEntryFor(names.length), volume);
+      let i = 0;
+      for (let y = 0; y < size.y.value; y++)
+        for (let z = 0; z < size.z.value; z++)
+          for (let x = 0; x < size.x.value; x++) {
+            const name = names[indices[i++]];
+            if (name !== 'minecraft:air') decoded.set(`${pos.x.value + x},${pos.y.value + y},${pos.z.value + z}`, name);
+          }
+    }
+    expect(decoded.size).toBe(5);
+    for (const [x, y, z, id] of placed) expect(decoded.get(`${x},${y},${z}`)).toBe(id);
   });
 });

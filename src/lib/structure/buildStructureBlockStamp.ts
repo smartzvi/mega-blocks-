@@ -6,6 +6,7 @@ import { decodeBlockstateKey } from './blockstateKey';
 import { resolveFallbackTextureKey } from './resolveFallbackTexture';
 import { filterPaletteForSource } from '../palette/glassSource';
 import { filterLightSourcesForSource } from '../palette/lightSourceExclusion';
+import { filterPaletteForRedstoneSource } from '../palette/redstoneSource';
 import { createVoxelGrid, setVoxel } from '../voxel/voxelGrid';
 
 type FileLoaderMap = Map<string, () => Promise<Uint8Array>>;
@@ -103,7 +104,10 @@ export async function buildStructureBlockStamp(
 
   const fallbackKey = await resolveFallbackTextureKey(blockId, blockStateFiles, modelFiles);
   const texture = (fallbackKey && (await decodeTexture(fallbackKey))) || buildMissingTexture();
-  const effectivePalette = filterLightSourcesForSource(filterPaletteForSource(palette, bareName), bareName);
+  const effectivePalette = filterPaletteForRedstoneSource(
+    filterLightSourcesForSource(filterPaletteForSource(palette, bareName), bareName),
+    bareName
+  );
   const matched = matchPixel(averageColorLab(texture), averageColorHsv(texture), 'top', effectivePalette).id;
   return solidStamp(matched, resolution);
 }

@@ -3,8 +3,16 @@ import type { PaletteEntry } from '../../types/minecraft';
 // The only red-family blocks in the curated palette (checked against buildPalette's real output).
 const RED_WIRE_BLOCKS = new Set(['minecraft:red_concrete', 'minecraft:red_wool', 'minecraft:red_terracotta']);
 
+function bareName(sourceName: string): string {
+  return sourceName.toLowerCase().replace(/^minecraft:/, '');
+}
+
 export function isRedstoneWireSource(sourceName: string): boolean {
-  return sourceName.toLowerCase().replace(/^minecraft:/, '') === 'redstone_wire';
+  return bareName(sourceName) === 'redstone_wire';
+}
+
+export function isRedstoneBlockSource(sourceName: string): boolean {
+  return bareName(sourceName) === 'redstone_block';
 }
 
 /**
@@ -14,9 +22,13 @@ export function isRedstoneWireSource(sourceName: string): boolean {
  * `stripped_mangrove_log`, a wood block. Same "matched but wrong-looking" class of fix as
  * oreSource.ts and leafSource.ts. Falls back to the full palette if a custom resource pack has none
  * of these blocks.
+ *
+ * The redstone block gets the same restriction: its brightest shade (230,32,8, ~29% of the
+ * texture) matched `orange_concrete`, which drew a bright orange frame around a block that is
+ * deep red all over in the game.
  */
 export function filterPaletteForRedstoneSource(palette: PaletteEntry[], sourceName: string): PaletteEntry[] {
-  if (!isRedstoneWireSource(sourceName)) return palette;
+  if (!isRedstoneWireSource(sourceName) && !isRedstoneBlockSource(sourceName)) return palette;
   const restricted = palette.filter((entry) => RED_WIRE_BLOCKS.has(entry.id));
   return restricted.length > 0 ? restricted : palette;
 }

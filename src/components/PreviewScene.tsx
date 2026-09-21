@@ -59,7 +59,7 @@ export function PreviewScene() {
   const cameraPosition: [number, number, number] = [24 * scale, 20 * scale, cameraZ];
   // Spectator move speed scales with the build the same way the camera framing does, so walking
   // through a 64-cube doesn't feel like crawling relative to its size.
-  const moveSpeed = 14 * scale;
+  const moveSpeed = 6 * scale;
 
   return (
     <div className="w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-[0_0_50px_-12px_rgba(16,185,129,0.15)]">

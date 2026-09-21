@@ -28,6 +28,30 @@ export function packLongArray(indices: number[], bitsPerEntry: number): BigInt64
   return BigInt64Array.from(longs.map((v) => BigInt.asIntN(64, v)));
 }
 
+/**
+ * Same layout as `packLongArray`, but for a mostly-empty volume: only the non-zero entries are
+ * given (`cellIndex[i]` holds `value[i]`), every other cell is 0 (air). Cost is proportional to the
+ * number of entries, not the volume, and no BigInt or per-cell array is involved — `packLongArray`
+ * threw `Invalid array length` once a structure's bounding box passed ~147M cells. Works on 32-bit
+ * halves, so `bitsPerEntry` must be at most 32.
+ *
+ * The result is a BigInt64Array viewing the packed words; this assumes a little-endian host (every
+ * browser), where long `i` is word `2i` (low half) followed by word `2i+1` (high half).
+ */
+export function packSparseIndices(cellIndex: Int32Array, value: Uint16Array, count: number, totalCells: number, bitsPerEntry: number): BigInt64Array {
+  const numLongs = Math.ceil((totalCells * bitsPerEntry) / 64) || 1;
+  const words = new Uint32Array(numLongs * 2);
+  for (let i = 0; i < count; i++) {
+    const bitOffset = cellIndex[i] * bitsPerEntry;
+    const word = bitOffset >>> 5;
+    const shift = bitOffset & 31;
+    const v = value[i];
+    words[word] |= v << shift;
+    if (shift + bitsPerEntry > 32) words[word + 1] |= v >>> (32 - shift);
+  }
+  return new BigInt64Array(words.buffer);
+}
+
 export function bitsPerEntryFor(paletteSize: number): number {
   return Math.max(2, Math.ceil(Math.log2(paletteSize)));
 }

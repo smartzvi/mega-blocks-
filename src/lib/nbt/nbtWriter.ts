@@ -15,6 +15,8 @@ const TAG_TYPE_ID: Record<NbtTag['type'], number> = {
   longArray: 12,
 };
 
+const HOST_IS_LITTLE_ENDIAN = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+
 /** Growable big-endian binary writer, used to serialize an NBT tag tree. */
 class ByteWriter {
   private chunks: Uint8Array[] = [];
@@ -65,6 +67,29 @@ class ByteWriter {
 
   writeBytes(bytes: Uint8Array) {
     this.push(bytes);
+  }
+
+  /** Writes every long big-endian in one chunk. A per-long `writeLong` allocated a tiny array per
+   *  entry, which is millions of allocations for a big litematic's BlockStates. */
+  writeLongs(longs: BigInt64Array) {
+    const out = new Uint8Array(longs.length * 8);
+    if (HOST_IS_LITTLE_ENDIAN) {
+      const src = new Uint8Array(longs.buffer, longs.byteOffset, longs.byteLength);
+      for (let i = 0; i < src.length; i += 8) {
+        out[i] = src[i + 7];
+        out[i + 1] = src[i + 6];
+        out[i + 2] = src[i + 5];
+        out[i + 3] = src[i + 4];
+        out[i + 4] = src[i + 3];
+        out[i + 5] = src[i + 2];
+        out[i + 6] = src[i + 1];
+        out[i + 7] = src[i];
+      }
+    } else {
+      const view = new DataView(out.buffer);
+      for (let i = 0; i < longs.length; i++) view.setBigInt64(i * 8, longs[i], false);
+    }
+    this.push(out);
   }
 
   writeUtf8String(value: string) {
@@ -131,7 +156,7 @@ function writePayload(writer: ByteWriter, tag: NbtTag) {
       break;
     case 'longArray':
       writer.writeInt(tag.value.length);
-      for (const v of tag.value) writer.writeLong(v);
+      writer.writeLongs(tag.value);
       break;
   }
 }

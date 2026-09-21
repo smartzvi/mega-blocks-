@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppState } from '../state/AppContext';
 import { useFinalVoxelGrid } from '../state/useFinalVoxelGrid';
 import { exportLitematic } from '../lib/nbt/litematicExport';
@@ -11,9 +11,22 @@ function downloadBytes(bytes: Uint8Array, filename: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // Revoking right after click() can cancel the download of a large file before the browser has
+  // finished reading the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
+
+/** Lets the browser paint (a "Preparing…" message) before a long synchronous export starts.
+ *  requestAnimationFrame never fires in a hidden tab, so a timer backs it up — otherwise the
+ *  export would wait forever. */
+const nextPaint = () =>
+  new Promise<void>((resolve) => {
+    requestAnimationFrame(() => setTimeout(resolve, 0));
+    setTimeout(resolve, 100);
+  });
 
 function DownloadIcon() {
   return (
@@ -34,6 +47,8 @@ const SHAPE_LABEL: Record<string, string> = {
 export function ExportButtons() {
   const state = useAppState();
   const voxelGrid = useFinalVoxelGrid();
+  const [exporting, setExporting] = useState<'litematic' | 'nbt' | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const sourceName =
     state.mode === 'item'
@@ -77,6 +92,22 @@ export function ExportButtons() {
             ? 'tree'
             : SHAPE_LABEL[state.shape];
 
+  async function runExport(kind: 'litematic' | 'nbt') {
+    if (exporting) return;
+    setExportError(null);
+    setExporting(kind);
+    try {
+      await nextPaint();
+      if (kind === 'litematic') downloadBytes(exportLitematic(voxelGrid!, baseName), `${baseName}.litematic`);
+      else downloadBytes(exportVanillaStructureNbt(voxelGrid!), `${baseName}.nbt`);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      setExportError(`Couldn't create the .${kind} file — ${detail}. Try a lower resolution or a smaller build.`);
+    } finally {
+      setExporting(null);
+    }
+  }
+
   return (
     <div className="flex flex-col items-center gap-4">
       <div className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/60 px-4 py-1.5 text-xs font-medium text-slate-300">
@@ -88,20 +119,25 @@ export function ExportButtons() {
 
       <div className="flex w-full max-w-md flex-col gap-3 sm:flex-row">
         <button
-          onClick={() => downloadBytes(exportLitematic(voxelGrid, baseName), `${baseName}.litematic`)}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/40 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-700/50 active:translate-y-0"
+          onClick={() => runExport('litematic')}
+          disabled={exporting !== null}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/40 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-700/50 active:translate-y-0 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
         >
           <DownloadIcon />
-          Download .litematic
+          {exporting === 'litematic' ? 'Preparing…' : 'Download .litematic'}
         </button>
         <button
-          onClick={() => downloadBytes(exportVanillaStructureNbt(voxelGrid), `${baseName}.nbt`)}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/40 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-700/50 active:translate-y-0"
+          onClick={() => runExport('nbt')}
+          disabled={exporting !== null}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/40 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-700/50 active:translate-y-0 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
         >
           <DownloadIcon />
-          Download .nbt
+          {exporting === 'nbt' ? 'Preparing…' : 'Download .nbt'}
         </button>
       </div>
+      {exportError && (
+        <p className="max-w-md rounded-lg bg-red-950/50 px-3 py-2 text-center text-xs text-red-300 ring-1 ring-red-900">{exportError}</p>
+      )}
     </div>
   );
 }
