@@ -23,14 +23,10 @@ import { rotateElementY, type YRotation } from './rotateElement';
  * chestModel's own doc below) — every other template in this file samples real decoded texture
  * pixels and matches them per-voxel, but the real chest texture's natural wood-grain noise fought
  * several rounds of "the colors are messy" user feedback before being replaced outright with a
- * synthetic, deterministic design instead. That design went through two iterations: a first pass
- * added a bold decorative dark frame around every edge/corner per an initial (unattached, verbally
- * described) reference image; a direct pixel inspection of the real `entity/chest/normal.png`
- * afterward (decoding it and dumping its actual UV atlas as ASCII, not going from memory) showed
- * real vanilla has no such frame at all — it's almost entirely plain oak-plank color, with only a
- * tiny latch icon and thin 1px seam rows at each box's top/bottom rim. Per explicit follow-up
- * request ("match the real vanilla"), chestModel was simplified to match that: plank fill, one
- * thin seam at the lid/base boundary, and a small latch — no corner posts, no top/bottom margins.
+ * synthetic, deterministic design instead: plank fill, a 1-voxel dark outline on every face edge
+ * (corner posts plus rims and the lid/base band), and a small latch, transcribed from the real
+ * texture's atlas (see chestModel's doc). An intermediate revision removed the outline as "not in
+ * vanilla" after misreading that atlas; the user's reference render of the real chest showed it is.
  *
  * Shulker box's real geometry is genuinely more intricate (small corner/hinge details visible in
  * the texture beyond a simple 2-box split), so this is a coarser approximation than chest: a
@@ -117,27 +113,31 @@ function rotateModelY(model: BlockModel, degrees: YRotation): BlockModel {
   return { textures: model.textures, elements: model.elements.map((el) => rotateElementY(el, degrees)) };
 }
 
-type ChestElementRole = 'fill' | 'seam' | 'latch';
+type ChestElementRole = 'fill' | 'frame' | 'latch';
 
 /**
- * Chest/trapped_chest/ender_chest geometry, matching real vanilla's actual look — confirmed by
- * decoding the real `entity/chest/normal.png` and dumping its raw UV atlas as ASCII rather than
- * going from memory: the real texture is almost entirely plain oak-plank color (no decorative dark
- * frame anywhere), with a thin 1px-equivalent dark seam only at each box's top/bottom rim, and a
- * small latch icon (a 6x5 patch in the corner of the atlas) — nothing like the bold corner-post
- * frame an earlier, unverified design used.
+ * Chest/trapped_chest/ender_chest geometry, transcribed from the real `entity/chest/normal.png`
+ * (its UV atlas dumped as ASCII, not from memory). Every face of the real chest's two boxes has a
+ * 1px dark outline with plank inside: the lid is 5 tall (a 1px rim top and bottom, 3px of plank
+ * between), the base 10 tall (1px rim top and bottom, 8px of plank), and the two overlap by one row
+ * where the lid sits on the base, which is why the side view shows a single dark band there. (An
+ * earlier revision dropped this outline after misreading the atlas as "almost entirely plain
+ * plank"; the outline is what makes it read as a chest, and the user's reference render of the
+ * real chest shows it plainly.)
  *
- * So the model here is deliberately minimal: two "fill" boxes (base, lid) in a plain plank color,
- * one thin "seam" band straddling their shared Y=9 boundary (the single most visually load-bearing
- * cue — it's what actually reads as "a lid sitting on a base" at a glance, and corresponds to the
- * real texture's genuine dark rim rows), and a small latch bridging that seam. No corner posts, no
- * top/bottom margins — those were the bold-frame look real vanilla doesn't have.
+ * A face outline on a voxel box is just the box's 12 edges, one voxel thick: a voxel on an edge
+ * shows the outline colour on both faces it touches, and where two faces meet the two outlines sit
+ * side by side, the thick corner posts in the reference. So the model is:
+ *  - two `fill` boxes (base y 0-10, lid y 9-14, footprint 1-15) in plank,
+ *  - `frame` pieces on top: four full-height corner posts, plus a ring around the bottom rim
+ *    (y 0-1), the lid/base band (y 9-10) and the top rim (y 13-14),
+ *  - a small `latch` in front, straddling the band, added last so it always wins.
  *
- * `openSide`, when given, extends fill flush to the true block edge (0 or 16) on the side facing a
- * real double chest's other half instead of stopping at 1/15, so two adjacent halves meet with
- * continuous, unbroken plank. The seam still extends the full width to match, and the latch shifts
- * flush to that same open edge, so two adjacent halves' latch pieces meet exactly at the shared
- * boundary and read as one continuous latch.
+ * `openSide`, when given, extends fill and rings flush to the true block edge (0 or 16) on the side
+ * facing a real double chest's other half, and omits the post and ring end-caps on that side, so
+ * two adjacent halves join into one continuous chest (the real double-chest texture has no outline
+ * on the shared side either). The latch shifts flush to that same edge so the two halves' latch
+ * pieces meet at the shared boundary and read as one.
  *
  * Returns each element tagged with its `role` alongside the model — chestTemplateFor uses this to
  * build `elementPaletteRestrictions` by role instead of by a fixed index.
@@ -154,35 +154,64 @@ function chestModel(textureKey: string, openSide?: 'east' | 'west'): { model: Bl
     elements.push(el);
   };
 
-  push('fill', flatBox([xMin, 0, 1], [xMax, 9, 15])); // base fill
-  push('fill', flatBox([xMin, 9, 1], [xMax, 14, 15])); // lid fill
-  push('seam', flatBox([xMin, 8, 1], [xMax, 10, 15])); // thin seam, straddles Y=9 (real base/lid rim)
-  push('latch', flatBox([latchX[0], 7, 0], [latchX[1], 11, 1])); // latch, added last so it always wins
+  push('fill', flatBox([xMin, 0, 1], [xMax, 10, 15])); // base
+  push('fill', flatBox([xMin, 9, 1], [xMax, 14, 15])); // lid
+
+  const closedWest = openSide !== 'west';
+  const closedEast = openSide !== 'east';
+
+  // Corner posts, full height. The open side of a double-chest half has none.
+  for (const z of [1, 14]) {
+    if (closedWest) push('frame', flatBox([1, 0, z], [2, 14, z + 1]));
+    if (closedEast) push('frame', flatBox([14, 0, z], [15, 14, z + 1]));
+  }
+
+  // Rings: bottom rim, the lid/base band, top rim. The front and back bars run the full width; the
+  // side bars close the ring only where the chest has an outer side.
+  for (const [y0, y1] of [[0, 1], [9, 10], [13, 14]]) {
+    push('frame', flatBox([xMin, y0, 1], [xMax, y1, 2])); // front
+    push('frame', flatBox([xMin, y0, 14], [xMax, y1, 15])); // back
+    if (closedWest) push('frame', flatBox([1, y0, 2], [2, y1, 14]));
+    if (closedEast) push('frame', flatBox([14, y0, 2], [15, y1, 14]));
+  }
+
+  push('latch', flatBox([latchX[0], 7, 0], [latchX[1], 11, 1]));
 
   return { model: { textures: { main: textureKey }, elements }, roles };
 }
 
 // Every element restricted to exactly one block id — deterministic by construction, not by
 // incidental vote count the way this template's old natural-texture-wrap design was (see the file
-// header doc). `gray_terracotta` is the thin seam's dark tone; `oak_planks` is a literal match for
-// the fill — an actual plank-board texture, not a flat color standing in for one.
-const CHEST_SEAM_PALETTE = ['minecraft:gray_terracotta'];
-const CHEST_PLANK_PALETTE = ['minecraft:oak_planks'];
-// Ender chest keeps the same dark seam tone but its real theme is obsidian-black, not wood.
-// `minecraft:obsidian` isn't in this app's curated palette at all (confirmed directly) — an
-// unmatchable single-entry restriction falls back to the *unrestricted* palette (buildItemVoxelGrid.ts's
-// elementPaletteOverrides logic), which is exactly the "messy natural wrap" problem this whole
-// redesign exists to avoid. `black_concrete` is a real, available, uniformly-black block that
-// reads the same obsidian-dark theme.
-const ENDER_CHEST_FILL_PALETTE = ['minecraft:black_concrete'];
+// header doc). `gray_terracotta` is the nearest palette block to the real texture's outline colour
+// (47,42,33). The fill was `oak_planks` (a literal plank-board match for the real plank average,
+// (157,109,36)) until explicit follow-up feedback that it read as too pale — wanted "golden brown
+// — with shades of warm brown, amber, caramel, and ochre" instead. `yellow_terracotta` is both a
+// closer colour match (deltaE 14.2 vs. oak_planks' 16.7, measured against that same real average)
+// and, unlike the muted planks, an actually golden/ochre tone — confirmed by rendering both as a
+// real isometric chest and comparing side by side, not from the deltaE number alone.
+const CHEST_FRAME_PALETTE = ['minecraft:gray_terracotta'];
+const CHEST_PLANK_PALETTE = ['minecraft:yellow_terracotta'];
+// Ender chest is obsidian-dark, not wood: the real texture's body averages (16,33,40) and its
+// outline (2,14,20) — darker than the body. `minecraft:obsidian` isn't in this app's curated
+// palette at all (confirmed directly), and an unmatchable single-entry restriction falls back to
+// the *unrestricted* palette (buildItemVoxelGrid.ts's elementPaletteOverrides logic) — exactly the
+// "messy natural wrap" this design exists to avoid. So: black_wool for the body, the darker
+// black_concrete for the outline.
+const ENDER_CHEST_FILL_PALETTE = ['minecraft:black_wool'];
+const ENDER_CHEST_FRAME_PALETTE = ['minecraft:black_concrete'];
 // A clean, uniform metal gray for the latch.
 const CHEST_KNOB_PALETTE = ['minecraft:light_gray_concrete'];
 // Ender chest's real knob is a distinct golden-yellow accent, not the gray metal latch
 // normal/trapped chests have.
 const ENDER_CHEST_KNOB_PALETTE = ['minecraft:yellow_terracotta'];
 
-function chestElementRestrictions(roles: ChestElementRole[], fillPalette: string[], knobPalette: string[]): Record<number, string[]> {
-  const paletteFor: Record<ChestElementRole, string[]> = { fill: fillPalette, seam: CHEST_SEAM_PALETTE, latch: knobPalette };
+function chestElementRestrictions(
+  roles: ChestElementRole[],
+  fillPalette: string[],
+  knobPalette: string[],
+  framePalette: string[] = CHEST_FRAME_PALETTE
+): Record<number, string[]> {
+  const paletteFor: Record<ChestElementRole, string[]> = { fill: fillPalette, frame: framePalette, latch: knobPalette };
   return Object.fromEntries(roles.map((role, index) => [index, paletteFor[role]]));
 }
 
@@ -679,7 +708,7 @@ export const HAND_AUTHORED_TEMPLATES: Record<string, HandAuthoredTemplateEntry> 
   // plain template, unaffected by the left/right rotation machinery above.
   ender_chest: (() => {
     const { model, roles } = chestModel('chest/ender');
-    return template(model, 16, chestElementRestrictions(roles, ENDER_CHEST_FILL_PALETTE, ENDER_CHEST_KNOB_PALETTE));
+    return template(model, 16, chestElementRestrictions(roles, ENDER_CHEST_FILL_PALETTE, ENDER_CHEST_KNOB_PALETTE, ENDER_CHEST_FRAME_PALETTE));
   })(),
   shulker_box: template(shulkerModel('shulker/shulker')),
   ...Object.fromEntries(

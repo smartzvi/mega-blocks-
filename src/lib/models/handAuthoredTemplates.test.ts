@@ -14,42 +14,58 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
     expect(chest.heightUnits).toBe(16);
     expect(chest.depthUnits).toBe(16);
 
-    // The seam (element 2) is the same dark tone for all three...
+    // The frame (element 2 is its first corner post) is the same dark brown for normal/trapped, and
+    // a darker black for the ender chest, whose real outline is darker than its body...
     expect(chest.elementPaletteRestrictions?.[2]).toEqual(['minecraft:gray_terracotta']);
-    expect(ender.elementPaletteRestrictions?.[2]).toEqual(chest.elementPaletteRestrictions?.[2]);
-    // ...but the fill (0, 1) and knob/latch (last) differ: real oak planks for chest/trapped_chest,
-    // black concrete + gold accent for the black/purple-themed ender chest (real `obsidian` isn't
-    // in this app's curated palette at all — confirmed directly — so it would silently fall back
-    // to the unrestricted match instead of actually restricting anything).
-    expect(chest.elementPaletteRestrictions?.[0]).toEqual(['minecraft:oak_planks']);
-    expect(chest.elementPaletteRestrictions?.[1]).toEqual(['minecraft:oak_planks']);
-    expect(trapped.elementPaletteRestrictions?.[0]).toEqual(['minecraft:oak_planks']);
-    expect(ender.elementPaletteRestrictions?.[0]).toEqual(['minecraft:black_concrete']);
+    expect(trapped.elementPaletteRestrictions?.[2]).toEqual(['minecraft:gray_terracotta']);
+    expect(ender.elementPaletteRestrictions?.[2]).toEqual(['minecraft:black_concrete']);
+    // ...and the fill (0, 1) and knob/latch (last) differ: a golden-brown yellow_terracotta for
+    // chest/trapped_chest (closer to the real plank colour than oak_planks, and reads as amber/
+    // ochre rather than pale tan — see CHEST_PLANK_PALETTE's own doc), black wool + gold accent for
+    // the black/purple-themed ender chest (real `obsidian` isn't in this app's curated palette at
+    // all — confirmed directly — so it would silently fall back to the unrestricted match instead
+    // of actually restricting anything).
+    expect(chest.elementPaletteRestrictions?.[0]).toEqual(['minecraft:yellow_terracotta']);
+    expect(chest.elementPaletteRestrictions?.[1]).toEqual(['minecraft:yellow_terracotta']);
+    expect(trapped.elementPaletteRestrictions?.[0]).toEqual(['minecraft:yellow_terracotta']);
+    expect(ender.elementPaletteRestrictions?.[0]).toEqual(['minecraft:black_wool']);
     const lastIndex = chest.model.elements.length - 1;
     expect(chest.elementPaletteRestrictions?.[lastIndex]).toEqual(['minecraft:light_gray_concrete']);
     expect(ender.elementPaletteRestrictions?.[lastIndex]).toEqual(['minecraft:yellow_terracotta']);
   });
 
-  it('chest has exactly 4 elements (base fill + lid fill + seam + latch), all within 0-16 bounds, the base/lid fills non-overlapping in Y, and the latch straddling their real seam — regression test matching real vanilla\'s actual look (plain plank fill, thin seam, small latch, no decorative frame)', () => {
+  it('chest is two plank boxes plus a dark 1-voxel outline (4 corner posts, bottom/band/top rings) and a latch, all within 0-16 bounds — regression test for the real chest texture outline, per the reference render of the real chest', () => {
     const { elements } = resolveHandAuthoredTemplate('chest')!.model;
-    expect(elements).toHaveLength(4);
+    // 2 fills + 4 posts + 3 rings x 4 bars + latch.
+    expect(elements).toHaveLength(2 + 4 + 12 + 1);
     for (const el of elements) {
       for (const v of [...el.from, ...el.to]) {
         expect(v).toBeGreaterThanOrEqual(0);
         expect(v).toBeLessThanOrEqual(16);
       }
     }
-    const [baseFill, lidFill, seam, latch] = elements;
-    expect(baseFill.to[1]).toBeLessThanOrEqual(lidFill.from[1]); // base fill sits below the lid fill
+    const [baseFill, lidFill, ...rest] = elements;
+    const latch = rest[rest.length - 1];
+    const frame = rest.slice(0, -1);
 
-    // The seam straddles Y=9, the real base/lid boundary.
-    expect(seam.from[1]).toBeLessThan(9);
-    expect(seam.to[1]).toBeGreaterThan(9);
+    // Real box heights: base 10 tall from the floor, lid 5 tall, overlapping by the one band row.
+    expect([baseFill.from[1], baseFill.to[1]]).toEqual([0, 10]);
+    expect([lidFill.from[1], lidFill.to[1]]).toEqual([9, 14]);
 
-    // The latch protrudes in front of the base/lid's own front face and straddles their real seam.
+    // Full-height corner posts (1x1 in plan) and a band ring on the shared row y=9..10.
+    const posts = frame.filter((el) => el.to[0] - el.from[0] === 1 && el.to[2] - el.from[2] === 1);
+    expect(posts).toHaveLength(4);
+    for (const post of posts) expect([post.from[1], post.to[1]]).toEqual([0, 14]);
+    const bandBars = frame.filter((el) => el.from[1] === 9 && el.to[1] === 10);
+    expect(bandBars).toHaveLength(4);
+    // Rims: a ring at the bottom (y 0-1) and at the top (y 13-14).
+    expect(frame.filter((el) => el.from[1] === 0 && el.to[1] === 1)).toHaveLength(4);
+    expect(frame.filter((el) => el.from[1] === 13 && el.to[1] === 14)).toHaveLength(4);
+
+    // The latch protrudes in front of the front face and straddles the band.
     expect(latch.from[2]).toBeLessThan(baseFill.from[2]);
-    expect(latch.from[1]).toBeLessThan(lidFill.from[1]);
-    expect(latch.to[1]).toBeGreaterThan(baseFill.to[1]);
+    expect(latch.from[1]).toBeLessThan(9);
+    expect(latch.to[1]).toBeGreaterThan(10);
   });
 
   it('with no real type/facing properties (type=single, or item mode\'s no-properties default), always builds the full unrotated chest regardless of a stray facing property alone', () => {
@@ -58,25 +74,31 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
     const withTypeSingle = resolveHandAuthoredTemplate('chest', { facing: 'west', type: 'single' })!;
     expect(withFacingOnly.model.elements).toEqual(plain.model.elements);
     expect(withTypeSingle.model.elements).toEqual(plain.model.elements);
-    expect(plain.model.elements).toHaveLength(4);
+    expect(plain.model.elements).toHaveLength(19);
   });
 
-  it('a real type=right/type=left chest (default facing=north, no rotation) extends fill/latch flush to the true block edge on the side facing its twin, per the confirmed left/right-to-compass rule (right\'s open side is west, left\'s is east, when facing=north) — still 4 elements, since there are no corner posts to omit in the real-vanilla-matched design', () => {
+  it('a real type=right/type=left chest (default facing=north, no rotation) extends fill/latch flush to the true block edge on the side facing its twin, per the confirmed left/right-to-compass rule (right has its open side to the west and left to the east, when facing=north), and drops the outline posts and ring end-caps on that side so two halves join into one chest', () => {
     const right = resolveHandAuthoredTemplate('chest', { facing: 'north', type: 'right' })!;
-    expect(right.model.elements).toHaveLength(4);
+    // 2 fills + 2 posts + 3 rings x 3 bars + latch (the open side's post and end-cap bar are gone).
+    expect(right.model.elements).toHaveLength(2 + 2 + 9 + 1);
     const [rightBaseFill, rightLidFill] = right.model.elements;
     const rightLatch = right.model.elements[right.model.elements.length - 1];
     expect(rightBaseFill.from[0]).toBe(0); // flush to the true west edge, not inset to 2
     expect(rightLidFill.from[0]).toBe(0);
     expect(rightLatch.from[0]).toBe(0); // latch shifted flush to the same open (west) edge
+    // Nothing is left of the outline on the open (west) side: no 1-wide piece at x=1..2.
+    expect(right.model.elements.filter((el) => el.from[0] === 1 && el.to[0] === 2)).toHaveLength(0);
+    // The front/back bars still run right to the open edge.
+    expect(right.model.elements.some((el) => el.from[0] === 0 && el.to[0] === 15 && el.to[2] - el.from[2] === 1)).toBe(true);
 
     const left = resolveHandAuthoredTemplate('chest', { facing: 'north', type: 'left' })!;
-    expect(left.model.elements).toHaveLength(4);
+    expect(left.model.elements).toHaveLength(2 + 2 + 9 + 1);
     const [leftBaseFill, leftLidFill] = left.model.elements;
     const leftLatch = left.model.elements[left.model.elements.length - 1];
     expect(leftBaseFill.to[0]).toBe(16); // flush to the true east edge, not inset to 14
     expect(leftLidFill.to[0]).toBe(16);
     expect(leftLatch.to[0]).toBe(16);
+    expect(left.model.elements.filter((el) => el.from[0] === 14 && el.to[0] === 15)).toHaveLength(0);
   });
 
   it('rotates a double-chest half to match a real non-north facing — regression test against a real bundled double chest (woodland_mansion/1x2_a9): facing=west pairs type=right at the lower Z with type=left at the higher Z, i.e. right\'s open side is south and left\'s is north', () => {

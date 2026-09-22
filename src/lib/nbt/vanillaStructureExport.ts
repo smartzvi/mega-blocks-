@@ -4,6 +4,7 @@ import { writeNbt } from './nbtWriter';
 import { gzipBytes } from './gzip';
 import { DATA_VERSION } from '../blockstate/dataVersion';
 import { countVoxels, forEachVoxel } from '../voxel/voxelGrid';
+import type { ExportProgressCallback } from './exportProgress';
 
 const TAG_END = 0;
 const TAG_LIST = 9;
@@ -21,8 +22,11 @@ const BLOCK_ENTRY_BYTES = 12 + 23 + 1;
  * serializing each field as its own tiny chunk cost ~7 µs and a lot of memory per block, so a
  * multi-million-block structure took half a minute and could run the tab out of memory; this is
  * one pass over the voxels. The small header and palette still go through the ordinary NBT writer.
+ *
+ * `onProgress`, when given, is called with 0..1 as that one pass runs, checked every 4096 blocks
+ * rather than every one — same cheap-counter technique cullComposedInterior.ts uses.
  */
-export function buildVanillaStructureBytes(grid: VoxelGrid): Uint8Array {
+export function buildVanillaStructureBytes(grid: VoxelGrid, onProgress?: (fraction: number) => void): Uint8Array {
   const paletteIds: string[] = [];
   const paletteIndex = new Map<string, number>();
   const count = countVoxels(grid);
@@ -30,7 +34,9 @@ export function buildVanillaStructureBytes(grid: VoxelGrid): Uint8Array {
   const blocks = new Uint8Array(count * BLOCK_ENTRY_BYTES);
   const view = new DataView(blocks.buffer);
   let at = 0;
+  let visited = 0;
   forEachVoxel(grid, (x, y, z, blockId) => {
+    if (onProgress && count > 0 && ++visited % 4096 === 0) onProgress(visited / count);
     let index = paletteIndex.get(blockId);
     if (index === undefined) {
       index = paletteIds.length;
@@ -59,6 +65,7 @@ export function buildVanillaStructureBytes(grid: VoxelGrid): Uint8Array {
     at += 23;
     blocks[at++] = TAG_END;
   });
+  onProgress?.(1);
 
   // Root compound, in the order the game writes it: DataVersion, size, entities, blocks, palette.
   const head = writeNbt(
@@ -93,7 +100,13 @@ export function buildVanillaStructureBytes(grid: VoxelGrid): Uint8Array {
   return out;
 }
 
-/** Serializes and gzips a voxel grid as a vanilla structure .nbt file, ready to download. */
-export function exportVanillaStructureNbt(grid: VoxelGrid): Uint8Array {
-  return gzipBytes(buildVanillaStructureBytes(grid));
+/** Serializes and gzips a voxel grid as a vanilla structure .nbt file, ready to download.
+ *  `onProgress`, when given, reports the `write` stage while `buildVanillaStructureBytes` runs (by
+ *  far the bulk of the time on a big grid) and the `compress` stage around gzip. */
+export function exportVanillaStructureNbt(grid: VoxelGrid, onProgress?: ExportProgressCallback): Uint8Array {
+  const bytes = buildVanillaStructureBytes(grid, onProgress && ((fraction) => onProgress({ stage: 'write', fraction })));
+  onProgress?.({ stage: 'compress', fraction: 0 });
+  const gzipped = gzipBytes(bytes);
+  onProgress?.({ stage: 'compress', fraction: 1 });
+  return gzipped;
 }

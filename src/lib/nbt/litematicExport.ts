@@ -4,7 +4,8 @@ import { writeNbt } from './nbtWriter';
 import { gzipBytes } from './gzip';
 import { bitsPerEntryFor, packSparseIndices } from './bitpack';
 import { DATA_VERSION } from '../blockstate/dataVersion';
-import { forEachVoxel } from '../voxel/voxelGrid';
+import { countVoxels, forEachVoxel } from '../voxel/voxelGrid';
+import type { ExportProgressCallback } from './exportProgress';
 
 // Verified against Litemapy (github.com/SmylerMC/litemapy)'s info.py constants, not assumed.
 const LITEMATIC_VERSION = 6;
@@ -37,9 +38,20 @@ interface RegionBucket {
  * Builds the litematic NBT tag tree. Unlike the vanilla structure format, litematica's
  * BlockStates array is dense — every voxel in a region's volume needs a palette entry, including
  * the hollow interior, so air occupies palette index 0.
+ *
+ * `onWriteProgress`, when given, is called with 0..1 as the three passes below run (counting,
+ * placing, then per-region bit-packing — each visits every solid voxel once, so "voxels visited
+ * across all three / 3x the total" is a fair proxy for overall progress). Checked every 4096
+ * voxels, not every one — same cheap-counter technique cullComposedInterior.ts uses, so reporting
+ * adds almost nothing to a multi-million-voxel grid.
  */
-export function buildLitematicNbt(grid: VoxelGrid, name = 'Megablock'): NbtTag {
+export function buildLitematicNbt(grid: VoxelGrid, name = 'Megablock', onWriteProgress?: (fraction: number) => void): NbtTag {
   const { sizeX, sizeY, sizeZ } = grid;
+  const totalForProgress = countVoxels(grid) * 3;
+  let visited = 0;
+  const reportVisit = () => {
+    if (onWriteProgress && totalForProgress > 0 && ++visited % 4096 === 0) onWriteProgress(visited / totalForProgress);
+  };
   const tilesX = Math.ceil(sizeX / REGION_EDGE);
   const tilesY = Math.ceil(sizeY / REGION_EDGE);
   const tilesZ = Math.ceil(sizeZ / REGION_EDGE);
@@ -51,6 +63,7 @@ export function buildLitematicNbt(grid: VoxelGrid, name = 'Megablock'): NbtTag {
   const buckets = new Map<number, RegionBucket>();
   let totalBlocks = 0;
   forEachVoxel(grid, (x, y, z, blockId) => {
+    reportVisit();
     if (!blockIndex.has(blockId)) {
       blockIndex.set(blockId, blockIds.length);
       blockIds.push(blockId);
@@ -86,6 +99,7 @@ export function buildLitematicNbt(grid: VoxelGrid, name = 'Megablock'): NbtTag {
     bucket.ids = new Uint16Array(bucket.count);
   }
   forEachVoxel(grid, (x, y, z, blockId) => {
+    reportVisit();
     const bucket = buckets.get(tileIndex(Math.floor(x / REGION_EDGE), Math.floor(y / REGION_EDGE), Math.floor(z / REGION_EDGE)))!;
     const size = regionSize(bucket);
     const lx = x - bucket.tx * REGION_EDGE;
@@ -118,7 +132,10 @@ export function buildLitematicNbt(grid: VoxelGrid, name = 'Megablock'): NbtTag {
     const localOf = new Map<number, number>(ordered.map((global, i) => [global, i + 1]));
     const localIds: string[] = [AIR_ID, ...ordered.map((global) => blockIds[global])];
     const values = new Uint16Array(bucket.count);
-    for (let i = 0; i < bucket.count; i++) values[i] = localOf.get(bucket.ids[i])!;
+    for (let i = 0; i < bucket.count; i++) {
+      reportVisit();
+      values[i] = localOf.get(bucket.ids[i])!;
+    }
 
     const bitsPerEntry = bitsPerEntryFor(localIds.length);
     const blockStates = packSparseIndices(bucket.cells, values, bucket.count, volume, bitsPerEntry);
@@ -153,6 +170,7 @@ export function buildLitematicNbt(grid: VoxelGrid, name = 'Megablock'): NbtTag {
     PreviewImageData: nbt.intArray([]),
   });
 
+  onWriteProgress?.(1);
   return nbt.compound({
     Version: nbt.int(LITEMATIC_VERSION),
     SubVersion: nbt.int(LITEMATIC_SUBVERSION),
@@ -162,9 +180,15 @@ export function buildLitematicNbt(grid: VoxelGrid, name = 'Megablock'): NbtTag {
   });
 }
 
-/** Serializes and gzips a voxel grid as a .litematic file, ready to download. */
-export function exportLitematic(grid: VoxelGrid, name?: string): Uint8Array {
-  const root = buildLitematicNbt(grid, name);
+/** Serializes and gzips a voxel grid as a .litematic file, ready to download. `onProgress`, when
+ *  given, reports the `write` stage while `buildLitematicNbt` runs (by far the bulk of the time on
+ *  a big grid) and the `compress` stage around gzip (which has no sub-progress of its own). */
+export function exportLitematic(grid: VoxelGrid, name?: string, onProgress?: ExportProgressCallback): Uint8Array {
+  const root = buildLitematicNbt(grid, name, onProgress && ((fraction) => onProgress({ stage: 'write', fraction })));
+  onProgress?.({ stage: 'write', fraction: 1 });
   const bytes = writeNbt('', root);
-  return gzipBytes(bytes);
+  onProgress?.({ stage: 'compress', fraction: 0 });
+  const gzipped = gzipBytes(bytes);
+  onProgress?.({ stage: 'compress', fraction: 1 });
+  return gzipped;
 }

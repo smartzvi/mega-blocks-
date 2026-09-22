@@ -3,7 +3,10 @@ import { useAppState } from '../state/AppContext';
 import { useFinalVoxelGrid } from '../state/useFinalVoxelGrid';
 import { exportLitematic } from '../lib/nbt/litematicExport';
 import { exportVanillaStructureNbt } from '../lib/nbt/vanillaStructureExport';
+import { exportGridToBytes } from '../lib/nbt/exportClient';
+import type { ExportProgress } from '../lib/nbt/exportProgress';
 import { countVoxels } from '../lib/voxel/voxelGrid';
+import { ExportProgressBar } from './ExportProgressBar';
 
 function downloadBytes(bytes: Uint8Array, filename: string) {
   const blob = new Blob([bytes as BlobPart], { type: 'application/octet-stream' });
@@ -48,6 +51,7 @@ export function ExportButtons() {
   const state = useAppState();
   const voxelGrid = useFinalVoxelGrid();
   const [exporting, setExporting] = useState<'litematic' | 'nbt' | null>(null);
+  const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
   const sourceName =
@@ -96,15 +100,28 @@ export function ExportButtons() {
     if (exporting) return;
     setExportError(null);
     setExporting(kind);
+    setProgress(null);
     try {
+      // One frame's delay before the real work starts (worker dispatch is cheap either way) so the
+      // "Preparing…" state actually paints, same reasoning nextPaint's own doc explains.
       await nextPaint();
-      if (kind === 'litematic') downloadBytes(exportLitematic(voxelGrid!, baseName), `${baseName}.litematic`);
-      else downloadBytes(exportVanillaStructureNbt(voxelGrid!), `${baseName}.nbt`);
+      const bytes = await exportGridToBytes(
+        voxelGrid!,
+        kind,
+        baseName,
+        (p) => setProgress(p),
+        // Only reached with no worker available: no live-updating bar mid-call (a synchronous loop
+        // on the main thread can't repaint until it returns — see exportClient.ts's own doc), but
+        // still the same instrumented, real export.
+        (onProgress) => (kind === 'litematic' ? exportLitematic(voxelGrid!, baseName, onProgress) : exportVanillaStructureNbt(voxelGrid!, onProgress))
+      );
+      downloadBytes(bytes, `${baseName}.${kind}`);
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       setExportError(`Couldn't create the .${kind} file — ${detail}. Try a lower resolution or a smaller build.`);
     } finally {
       setExporting(null);
+      setProgress(null);
     }
   }
 
@@ -135,6 +152,7 @@ export function ExportButtons() {
           {exporting === 'nbt' ? 'Preparing…' : 'Download .nbt'}
         </button>
       </div>
+      {exporting && <ExportProgressBar progress={progress} />}
       {exportError && (
         <p className="max-w-md rounded-lg bg-red-950/50 px-3 py-2 text-center text-xs text-red-300 ring-1 ring-red-900">{exportError}</p>
       )}
