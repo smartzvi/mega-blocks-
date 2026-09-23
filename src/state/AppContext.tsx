@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, type Dispatch, type ReactNode } from 'react';
-import type { BlockShape, BlockTextureSet, ConnectionMode, MatchedFaces, PaletteEntry, VoxelGrid } from '../types/minecraft';
+import type { BlockShape, BlockTextureSet, ConnectionMode, MatchedFaces, PaletteEntry, RailShape, VoxelGrid } from '../types/minecraft';
 
 export type Resolution = 16 | 32 | 48 | 64;
 export type AppMode = 'block' | 'item' | 'structure' | 'mobs' | 'trees';
@@ -33,6 +33,7 @@ export interface AppState {
   resolution: Resolution;
   shape: BlockShape;
   connectionMode: ConnectionMode;
+  railShape: RailShape;
   mode: AppMode;
   selectedItemName: string | null;
   itemVoxelGrid: VoxelGrid | null;
@@ -60,6 +61,7 @@ const initialState: AppState = {
   resolution: 16,
   shape: 'full_cube',
   connectionMode: 'stored',
+  railShape: 'north_south', // must match railTemplates.ts's own DEFAULT_RAIL_SHAPE
   mode: 'block',
   selectedItemName: null,
   itemVoxelGrid: null,
@@ -90,6 +92,7 @@ export type AppAction =
   | { type: 'RESOLUTION_CHANGED'; resolution: Resolution }
   | { type: 'SHAPE_CHANGED'; shape: BlockShape }
   | { type: 'CONNECTION_MODE_CHANGED'; connectionMode: ConnectionMode }
+  | { type: 'RAIL_SHAPE_CHANGED'; railShape: RailShape }
   | { type: 'MODE_CHANGED'; mode: AppMode }
   | { type: 'ITEM_VOXELIZING'; itemName: string }
   | { type: 'ITEM_VOXELIZED'; itemVoxelGrid: VoxelGrid }
@@ -104,7 +107,15 @@ export type AppAction =
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'ARCHIVE_LOADING':
-      return { ...initialState, status: 'loading-archive', resolution: state.resolution, shape: state.shape, connectionMode: state.connectionMode, mode: state.mode };
+      return {
+        ...initialState,
+        status: 'loading-archive',
+        resolution: state.resolution,
+        shape: state.shape,
+        connectionMode: state.connectionMode,
+        railShape: state.railShape,
+        mode: state.mode,
+      };
     case 'ARCHIVE_LOADED':
       return {
         ...state,
@@ -119,7 +130,16 @@ function reducer(state: AppState, action: AppAction): AppState {
         errorMessage: null,
       };
     case 'ARCHIVE_ERROR':
-      return { ...initialState, status: 'error', errorMessage: action.message, resolution: state.resolution, shape: state.shape, connectionMode: state.connectionMode, mode: state.mode };
+      return {
+        ...initialState,
+        status: 'error',
+        errorMessage: action.message,
+        resolution: state.resolution,
+        shape: state.shape,
+        connectionMode: state.connectionMode,
+        railShape: state.railShape,
+        mode: state.mode,
+      };
     case 'PALETTE_BUILT':
       return { ...state, status: 'ready', palette: action.palette };
     case 'BLOCK_SELECTED':
@@ -143,6 +163,9 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'CONNECTION_MODE_CHANGED':
       // Item mode only: the picked fence/pane/wall rebuilds (ItemPicker's effect re-runs on this).
       return { ...state, connectionMode: action.connectionMode, itemVoxelGrid: null };
+    case 'RAIL_SHAPE_CHANGED':
+      // Item mode only, same reasoning as CONNECTION_MODE_CHANGED: the picked rail rebuilds.
+      return { ...state, railShape: action.railShape, itemVoxelGrid: null };
     case 'MODE_CHANGED':
       return { ...state, mode: action.mode };
     case 'ITEM_VOXELIZING':

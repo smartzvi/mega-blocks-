@@ -111,15 +111,15 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
     expect(leftBaseFill.from[2]).toBe(0); // flush to the true north edge after rotation
   });
 
-  it('every element has all 6 faces defined, each referencing one of its model\'s own texture variables', () => {
+  it('every DEFINED face on every element references one of its model\'s own texture variables (rail is the one template with intentionally partial faces — a real flat rail model only ever defines top/bottom too, see railTemplates.ts)', () => {
     for (const key of Object.keys(HAND_AUTHORED_TEMPLATES)) {
       const { model } = resolveHandAuthoredTemplate(key)!;
       for (const el of model.elements) {
         for (const face of ['top', 'bottom', 'north', 'south', 'east', 'west'] as const) {
           const faceDef = el.faces[face];
-          expect(faceDef).toBeDefined();
-          expect(faceDef!.texture.startsWith('#')).toBe(true);
-          expect(model.textures[faceDef!.texture.slice(1)]).toBeDefined();
+          if (!faceDef) continue;
+          expect(faceDef.texture.startsWith('#')).toBe(true);
+          expect(model.textures[faceDef.texture.slice(1)]).toBeDefined();
         }
       }
     }
@@ -435,6 +435,20 @@ describe('HAND_AUTHORED_TEMPLATES', () => {
     // Every other head/skull is untouched — no evidence they had the same problem.
     for (const name of ['zombie_head', 'creeper_head', 'piglin_head', 'player_head']) {
       expect(resolveHandAuthoredTemplate(name)!.elementPaletteRestrictions).toBeUndefined();
+    }
+  });
+
+  it('rail, powered_rail, detector_rail and activator_rail are all wired in, each picking its own real texture — the powered trio switching to their lit "_on" texture from a real powered=true property, and only plain rail ever getting the corner texture (confirmed against the real jar: the powered trio\'s blockstates define no curve shapes at all — see railTemplates.ts\'s own doc)', () => {
+    expect(resolveHandAuthoredTemplate('rail')!.model.textures.main).toBe('rail');
+    expect(resolveHandAuthoredTemplate('rail', { shape: 'south_east' })!.model.textures.main).toBe('rail_corner');
+
+    for (const name of ['powered_rail', 'detector_rail', 'activator_rail']) {
+      expect(resolveHandAuthoredTemplate(name)!.model.textures.main).toBe(name);
+      expect(resolveHandAuthoredTemplate(name, { powered: 'false', shape: 'north_south' })!.model.textures.main).toBe(name);
+      expect(resolveHandAuthoredTemplate(name, { powered: 'true', shape: 'north_south' })!.model.textures.main).toBe(`${name}_on`);
+      // No real curve shape exists for these three — falls back to the straight texture rather than
+      // an unresolvable one.
+      expect(resolveHandAuthoredTemplate(name, { shape: 'south_east' })!.model.textures.main).toBe(name);
     }
   });
 });

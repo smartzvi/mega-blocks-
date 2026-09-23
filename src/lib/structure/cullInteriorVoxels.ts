@@ -31,6 +31,11 @@ const NON_OCCLUDING_PATTERNS = [
   // A flat film on top of a block: counting it as solid deleted the block underneath it (39 of 52
   // supports in ancient_city/city_center_3), leaving the wire floating over a hole.
   'redstone_wire',
+  // Same reasoning as redstone_wire: a rail (plain, powered, detector, activator — all match this
+  // one substring) is a thin decal sitting on top of a block, not covering it. An ascending rail's
+  // hand-authored ramp (railTemplates.ts) climbs well above the flat 1-voxel film the other three
+  // sit in, but it's still not a real wall — the block it climbs past must stay uncullable too.
+  'rail',
   // More things that sit ON a block without covering it. A scan of every bundled structure found
   // 865 blocks deleted from under exactly these (wheat 186, candles 135, short grass 74, snow
   // layers 71, fences 78, repeaters/comparators 48, stems 45, walls 43, ...), leaving a crop,

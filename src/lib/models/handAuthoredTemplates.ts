@@ -1,6 +1,7 @@
 import type { FaceName } from '../../types/minecraft';
 import type { BlockModel, BlockModelElement } from '../../types/item';
 import { rotateElementY, type YRotation } from './rotateElement';
+import { railTemplateFor } from './railTemplates';
 
 /**
  * Chest, trapped_chest, ender_chest, all shulker_box colors, all bed colors, and all sign/wall
@@ -768,6 +769,14 @@ export const HAND_AUTHORED_TEMPLATES: Record<string, HandAuthoredTemplateEntry> 
   // same "default variant only for v1" call already made for pig/cow/chicken biome variants.
   player_head: template(skullModel('player/wide/steve')),
   player_wall_head: template(skullModel('player/wide/steve')),
+  // See railTemplates.ts's own doc for why rails are hand-authored at all despite having real
+  // blockstate/model JSON. Only plain `rail` curves (confirmed against the real jar: the powered
+  // trio's blockstates define no curve shapes), and only the powered trio carries a real `powered`
+  // property picking the lit/unlit texture.
+  rail: (properties) => railTemplateFor('rail', properties, 'rail_corner'),
+  powered_rail: (properties) => railTemplateFor(properties?.powered === 'true' ? 'powered_rail_on' : 'powered_rail', properties),
+  detector_rail: (properties) => railTemplateFor(properties?.powered === 'true' ? 'detector_rail_on' : 'detector_rail', properties),
+  activator_rail: (properties) => railTemplateFor(properties?.powered === 'true' ? 'activator_rail_on' : 'activator_rail', properties),
 };
 
 /** Looks up and resolves an entry from HAND_AUTHORED_TEMPLATES, calling it with `properties` if

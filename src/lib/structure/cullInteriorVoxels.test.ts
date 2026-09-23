@@ -30,10 +30,16 @@ describe('isNonOccluding', () => {
       'short_grass', 'tall_grass', 'fern', 'large_fern', 'oak_sapling', 'red_tulip', 'potted_poppy', 'oak_fence',
       'nether_brick_fence', 'cobblestone_wall', 'polished_deepslate_wall', 'repeater', 'comparator', 'vine',
       'cave_vines', 'lily_pad', 'pointed_dripstone', 'snow', 'nether_wart', 'brown_mushroom', 'red_mushroom',
-      'cactus', 'poppy', 'dandelion', 'oxeye_daisy', 'dead_bush',
+      'cactus', 'poppy', 'dandelion', 'oxeye_daisy', 'dead_bush', 'rail', 'powered_rail', 'detector_rail', 'activator_rail',
     ]) {
       expect(isNonOccluding(`minecraft:${name}`), name).toBe(true);
     }
+  });
+
+  it('matches every real rail shape/property combination, including an ascending one whose hand-authored ramp climbs well above the flat 1-voxel film the others sit in', () => {
+    expect(isNonOccluding('minecraft:rail[shape=north_south]')).toBe(true);
+    expect(isNonOccluding('minecraft:rail[shape=ascending_north]')).toBe(true);
+    expect(isNonOccluding('minecraft:powered_rail[powered=true,shape=ascending_east]')).toBe(true);
   });
 
   it('keeps full blocks that merely share a name with those occluding (snow_block, *_block mushrooms, nether stems, wart block)', () => {

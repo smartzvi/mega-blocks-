@@ -90,3 +90,19 @@ export type BlockShape = 'full_cube' | 'slab' | 'stair' | 'door';
  *  lib/models/itemConnections.ts): `stored` is the block's bare default, `all` connects every
  *  side, `none` leaves every side open. Structure mode has no such setting. */
 export type ConnectionMode = 'stored' | 'all' | 'none';
+
+/** The real `shape` property a rail (or powered/detector/activator rail) blockstate carries — see
+ *  lib/models/railTemplates.ts. Picked manually in Item mode (RailShapeToggle), the same "no real
+ *  neighbors to infer from" reasoning ConnectionMode exists for; Structure mode always keeps
+ *  whatever shape the file saved instead. */
+export type RailShape =
+  | 'north_south'
+  | 'east_west'
+  | 'north_east'
+  | 'north_west'
+  | 'south_east'
+  | 'south_west'
+  | 'ascending_north'
+  | 'ascending_south'
+  | 'ascending_east'
+  | 'ascending_west';
