@@ -19,6 +19,7 @@
     "three": "^0.185.1"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.9",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.2",
     "@types/pako": "^2.0.4",
