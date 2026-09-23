@@ -34,6 +34,7 @@ export interface AppState {
   shape: BlockShape;
   connectionMode: ConnectionMode;
   railShape: RailShape;
+  leverPowered: boolean;
   mode: AppMode;
   selectedItemName: string | null;
   itemVoxelGrid: VoxelGrid | null;
@@ -62,6 +63,7 @@ const initialState: AppState = {
   shape: 'full_cube',
   connectionMode: 'stored',
   railShape: 'north_south', // must match railTemplates.ts's own DEFAULT_RAIL_SHAPE
+  leverPowered: false, // must match leverTemplate.ts's own DEFAULT_LEVER_POWERED
   mode: 'block',
   selectedItemName: null,
   itemVoxelGrid: null,
@@ -93,6 +95,7 @@ export type AppAction =
   | { type: 'SHAPE_CHANGED'; shape: BlockShape }
   | { type: 'CONNECTION_MODE_CHANGED'; connectionMode: ConnectionMode }
   | { type: 'RAIL_SHAPE_CHANGED'; railShape: RailShape }
+  | { type: 'LEVER_POWERED_CHANGED'; leverPowered: boolean }
   | { type: 'MODE_CHANGED'; mode: AppMode }
   | { type: 'ITEM_VOXELIZING'; itemName: string }
   | { type: 'ITEM_VOXELIZED'; itemVoxelGrid: VoxelGrid }
@@ -114,6 +117,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         shape: state.shape,
         connectionMode: state.connectionMode,
         railShape: state.railShape,
+        leverPowered: state.leverPowered,
         mode: state.mode,
       };
     case 'ARCHIVE_LOADED':
@@ -138,6 +142,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         shape: state.shape,
         connectionMode: state.connectionMode,
         railShape: state.railShape,
+        leverPowered: state.leverPowered,
         mode: state.mode,
       };
     case 'PALETTE_BUILT':
@@ -166,6 +171,10 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'RAIL_SHAPE_CHANGED':
       // Item mode only, same reasoning as CONNECTION_MODE_CHANGED: the picked rail rebuilds.
       return { ...state, railShape: action.railShape, itemVoxelGrid: null };
+    case 'LEVER_POWERED_CHANGED':
+      // Item mode only, same reasoning as CONNECTION_MODE_CHANGED/RAIL_SHAPE_CHANGED: the picked
+      // lever rebuilds with the new arm angle.
+      return { ...state, leverPowered: action.leverPowered, itemVoxelGrid: null };
     case 'MODE_CHANGED':
       return { ...state, mode: action.mode };
     case 'ITEM_VOXELIZING':

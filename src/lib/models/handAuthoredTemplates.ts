@@ -2,6 +2,7 @@ import type { FaceName } from '../../types/minecraft';
 import type { BlockModel, BlockModelElement } from '../../types/item';
 import { rotateElementY, type YRotation } from './rotateElement';
 import { railTemplateFor } from './railTemplates';
+import { leverTemplateFor } from './leverTemplate';
 
 /**
  * Chest, trapped_chest, ender_chest, all shulker_box colors, all bed colors, and all sign/wall
@@ -777,6 +778,10 @@ export const HAND_AUTHORED_TEMPLATES: Record<string, HandAuthoredTemplateEntry> 
   powered_rail: (properties) => railTemplateFor(properties?.powered === 'true' ? 'powered_rail_on' : 'powered_rail', properties),
   detector_rail: (properties) => railTemplateFor(properties?.powered === 'true' ? 'detector_rail_on' : 'detector_rail', properties),
   activator_rail: (properties) => railTemplateFor(properties?.powered === 'true' ? 'activator_rail_on' : 'activator_rail', properties),
+  // See leverTemplate.ts's own doc for why lever is hand-authored despite having real
+  // blockstate/model JSON: its moving arm uses the same unparsed per-element `rotation` feature
+  // ascending rails do.
+  lever: (properties) => leverTemplateFor(properties),
 };
 
 /** Looks up and resolves an entry from HAND_AUTHORED_TEMPLATES, calling it with `properties` if

@@ -3,6 +3,7 @@ import { useAppDispatch, useAppState } from '../state/AppContext';
 import { buildItemVoxelGrid } from '../lib/models/buildItemVoxelGrid';
 import { itemConnectionProperties } from '../lib/models/itemConnections';
 import { railShapeProperties } from '../lib/models/railTemplates';
+import { leverPoweredProperties } from '../lib/models/leverTemplate';
 import { loadAndDecodeEntityTexture, loadAndDecodeTexture } from '../lib/zip/decodeTexture';
 
 export function ItemPicker() {
@@ -73,7 +74,12 @@ export function ItemPicker() {
           decodeTexture,
           state.palette!,
           state.resolution,
-          { properties: itemConnectionProperties(itemName, state.connectionMode) ?? railShapeProperties(itemName, state.railShape) }
+          {
+            properties:
+              itemConnectionProperties(itemName, state.connectionMode) ??
+              railShapeProperties(itemName, state.railShape) ??
+              leverPoweredProperties(itemName, state.leverPowered),
+          }
         );
         if (!cancelled) dispatch({ type: 'ITEM_VOXELIZED', itemVoxelGrid });
       } catch (err) {
@@ -92,6 +98,7 @@ export function ItemPicker() {
     state.resolution,
     state.connectionMode,
     state.railShape,
+    state.leverPowered,
     state.blockStateFiles,
     state.modelFiles,
     state.blockTextureFiles,
@@ -137,7 +144,8 @@ export function ItemPicker() {
       <p className="mt-1.5 text-center text-xs text-slate-600">
         Item mode (beta) — voxelized from the block's real 3D model, not its flat texture. Most simple JSON-model
         blocks work. Pick a fence, pane, bars, wall or redstone wire and a control appears to show it connected or
-        isolated; pick a rail and a control appears to pick its shape, including sloped ascending rails.
+        isolated; pick a rail and a control appears to pick its shape, including sloped ascending rails; pick a lever
+        and a control appears to toggle it powered on or off.
       </p>
 
       {isOpen && filtered.length > 0 && (

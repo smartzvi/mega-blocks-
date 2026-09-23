@@ -36,6 +36,11 @@ const NON_OCCLUDING_PATTERNS = [
   // hand-authored ramp (railTemplates.ts) climbs well above the flat 1-voxel film the other three
   // sit in, but it's still not a real wall — the block it climbs past must stay uncullable too.
   'rail',
+  // Another thin decal-like attachment sitting on/against a block face, not covering it — same
+  // reasoning as rail/redstone_wire. Its hand-authored tilted arm (leverTemplate.ts) can lean past
+  // its own mounting block's edges depending on face/facing, but the mounting block it's actually
+  // attached to must stay uncullable regardless.
+  'lever',
   // More things that sit ON a block without covering it. A scan of every bundled structure found
   // 865 blocks deleted from under exactly these (wheat 186, candles 135, short grass 74, snow
   // layers 71, fences 78, repeaters/comparators 48, stems 45, walls 43, ...), leaving a crop,
