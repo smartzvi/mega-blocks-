@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { useAppState } from '../state/AppContext';
@@ -26,6 +26,7 @@ export function PreviewScene() {
   const isSpectating = viewMode === 'spectator';
   const isWalking = viewMode === 'walk';
   const [pointerLocked, setPointerLocked] = useState(false);
+  const [isFlying, setIsFlying] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(viewportRef);
   // Bumped every time spectator mode is left, so the `key` below forces PerspectiveCamera and
@@ -42,6 +43,10 @@ export function PreviewScene() {
   // value behind for the other.
   const walkInput = useRef<WalkInput>({ x: 0, z: 0 });
   const walkJump = useRef(false);
+  const walkDescend = useRef(false);
+  // Set when the walk button is pressed outside fullscreen: the fullscreen request is asynchronous, so
+  // walk mode starts once the browser confirms it (effect below), not immediately.
+  const walkPending = useRef(false);
 
   const exitSpectatorMode = useCallback(() => {
     setViewMode('orbit');
@@ -54,7 +59,27 @@ export function PreviewScene() {
     walkInput.current.x = 0;
     walkInput.current.z = 0;
     walkJump.current = false;
+    walkDescend.current = false;
+    setIsFlying(false);
   }, []);
+
+  const enterWalkMode = useCallback(() => {
+    if (isFullscreen) {
+      setViewMode('walk');
+      return;
+    }
+    walkPending.current = true;
+    toggleFullscreen();
+    // A refused fullscreen request never confirms; don't let a stale request start walking later.
+    window.setTimeout(() => (walkPending.current = false), 1500);
+  }, [isFullscreen, toggleFullscreen]);
+
+  useEffect(() => {
+    if (isFullscreen && walkPending.current && viewMode === 'orbit') {
+      walkPending.current = false;
+      setViewMode('walk');
+    }
+  }, [isFullscreen, viewMode]);
 
   // Walking is a fullscreen mode: leaving fullscreen (Esc, the browser's own controls, or our
   // button) returns to the normal viewer instead of walking around a small embedded canvas.
@@ -104,51 +129,7 @@ export function PreviewScene() {
     >
       <div className="flex items-center justify-between border-b border-slate-800 px-4 py-2.5">
         <span className="text-xs font-medium uppercase tracking-wider text-slate-500">3D Preview</span>
-        <div className="flex items-center gap-3">
-          {viewMode === 'orbit' && <span className="hidden text-xs text-slate-600 sm:inline">drag to rotate · scroll to zoom</span>}
-          {viewMode === 'orbit' && isFullscreen && (
-            <button
-              type="button"
-              onClick={() => setViewMode('walk')}
-              title="Walk mode — explore the build in first person (WASD + Space)"
-              aria-label="Enter walk mode"
-              className="rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-sm transition-colors hover:bg-slate-700"
-            >
-              🚶
-            </button>
-          )}
-          {viewMode === 'orbit' && (
-            <button
-              type="button"
-              onClick={() => setViewMode('spectator')}
-              title="Spectator mode — fly through and inspect the build"
-              aria-label="Enter spectator mode"
-              className="rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-sm transition-colors hover:bg-slate-700"
-            >
-              🎮
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-            className="rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-sm leading-none text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
-          >
-            {isFullscreen ? '🗗' : '⛶'}
-          </button>
-          {(isSpectating || isWalking) && (
-            <button
-              type="button"
-              onClick={isWalking ? exitWalkMode : exitSpectatorMode}
-              title={isWalking ? 'Exit walk mode' : 'Exit spectator mode'}
-              aria-label={isWalking ? 'Exit walk mode' : 'Exit spectator mode'}
-              className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-800/60 text-sm leading-none text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
-            >
-              ✕
-            </button>
-          )}
-        </div>
+        {viewMode === 'orbit' && <span className="hidden text-xs text-slate-600 sm:inline">drag to rotate · scroll to zoom</span>}
       </div>
       <div className={`relative w-full bg-gradient-to-b from-slate-900 to-slate-950 ${isFullscreen ? 'min-h-0 flex-1' : 'h-[480px]'}`}>
         <Canvas>
@@ -158,7 +139,14 @@ export function PreviewScene() {
           <directionalLight position={[-10, -10, -10]} intensity={0.3} />
           <VoxelMesh grid={voxelGrid} palette={palette} />
           {isWalking ? (
-            <WalkRig grid={voxelGrid} unit={state.resolution} moveRef={walkInput} jumpRef={walkJump} onLockChange={setPointerLocked} />
+            <WalkRig
+              grid={voxelGrid}
+              moveRef={walkInput}
+              jumpRef={walkJump}
+              descendRef={walkDescend}
+              onLockChange={setPointerLocked}
+              onFlyChange={setIsFlying}
+            />
           ) : isSpectating ? (
             <SpectatorRig moveSpeed={moveSpeed} joystickRef={moveVector} />
           ) : (
@@ -167,13 +155,18 @@ export function PreviewScene() {
         </Canvas>
         {/* Spectating shows only the movement controls themselves — no instructional text
             cluttering the render — since the joystick and buttons are self-explanatory and the
-            exit control already lives in the header above. */}
+            exit control lives in the top-right control cluster. */}
         {isWalking && (
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2">
               <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/70" />
               <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-white/70" />
             </div>
+            {isFlying && (
+              <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-emerald-500/40 bg-slate-900/80 px-3 py-1 text-xs font-medium text-emerald-300">
+                Flying · no collision · double-tap {isTouchDevice() ? 'jump' : 'Space'} to land
+              </div>
+            )}
             {isTouchDevice() ? (
               <div className="absolute inset-0 flex items-end justify-between p-4">
                 <div className="pointer-events-auto">
@@ -184,8 +177,9 @@ export function PreviewScene() {
                     }}
                   />
                 </div>
-                <div className="pointer-events-auto">
+                <div className="pointer-events-auto flex flex-col items-center gap-3">
                   <WalkJumpButton onChange={(held) => (walkJump.current = held)} />
+                  {isFlying && <WalkJumpButton down onChange={(held) => (walkDescend.current = held)} />}
                 </div>
               </div>
             ) : (
@@ -194,6 +188,7 @@ export function PreviewScene() {
                   <div className="rounded-xl border border-slate-700 bg-slate-900/90 px-6 py-4 text-center">
                     <p className="text-sm font-semibold text-slate-100">Click to play</p>
                     <p className="mt-1 text-xs text-slate-400">WASD to walk · Space to jump · mouse to look · Esc to release</p>
+                    <p className="mt-1 text-xs text-slate-500">Double-tap Space to fly through blocks · Shift to go down</p>
                   </div>
                 </div>
               )
@@ -215,7 +210,51 @@ export function PreviewScene() {
             </div>
           </div>
         )}
+        {/* Every view control lives here, inside the viewport's top-right corner, so it's reachable in
+            fullscreen and in every mode (the header above isn't part of the canvas). */}
+        <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+          {viewMode === 'orbit' && (
+            <>
+              <ViewButton label="Enter walk mode" title="Walk mode — explore in first person (opens fullscreen)" onClick={enterWalkMode}>
+                🚶
+              </ViewButton>
+              <ViewButton label="Enter spectator mode" title="Spectator mode — fly through and inspect the build" onClick={() => setViewMode('spectator')}>
+                🎮
+              </ViewButton>
+            </>
+          )}
+          <ViewButton
+            label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            onClick={toggleFullscreen}
+          >
+            {isFullscreen ? '🗗' : '⛶'}
+          </ViewButton>
+          {(isSpectating || isWalking) && (
+            <ViewButton
+              label={isWalking ? 'Exit walk mode' : 'Exit spectator mode'}
+              title={isWalking ? 'Exit walk mode' : 'Exit spectator mode'}
+              onClick={isWalking ? exitWalkMode : exitSpectatorMode}
+            >
+              ✕
+            </ViewButton>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function ViewButton({ label, title, onClick, children }: { label: string; title: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={label}
+      className="flex h-9 min-w-9 items-center justify-center rounded-full border border-slate-600 bg-slate-900/75 px-2.5 text-base leading-none text-slate-200 shadow-lg shadow-black/40 backdrop-blur-sm transition-colors hover:bg-slate-700 hover:text-white"
+    >
+      {children}
+    </button>
   );
 }

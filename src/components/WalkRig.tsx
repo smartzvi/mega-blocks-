@@ -8,11 +8,13 @@ import {
   fellOutOfWorld,
   physicsToRender,
   playerDims,
+  setFlying,
   spawnAboveCenter,
   stepPlayer,
   type PlayerState,
   type SolidFn,
 } from '../lib/walk/playerPhysics';
+import { detectDoubleTap } from '../lib/walk/doubleTap';
 
 const MOVE_KEYS: Record<string, [strafe: number, forward: number]> = {
   KeyW: [0, 1],
@@ -25,7 +27,12 @@ const MOVE_KEYS: Record<string, [strafe: number, forward: number]> = {
   ArrowRight: [1, 0],
 };
 // Space would scroll the page, and the arrows too, so those are swallowed while playing.
-const CAPTURED_KEYS = new Set([...Object.keys(MOVE_KEYS), 'Space']);
+const CAPTURED_KEYS = new Set([...Object.keys(MOVE_KEYS), 'Space', 'ShiftLeft', 'ShiftRight']);
+const DESCEND_KEYS = ['ShiftLeft', 'ShiftRight'];
+
+// The player is always a real Minecraft player in world blocks (1.8 tall, eyes at 1.62), and one voxel
+// is one block once the build is exported — so this is fixed, whatever resolution the build has.
+const DIMS = playerDims(1);
 
 const PITCH_LIMIT = Math.PI / 2 - 0.01;
 const LOOK_SENSITIVITY = 0.0022;
@@ -51,35 +58,44 @@ export interface WalkInput {
  * - Touch: no Pointer Lock on touch devices, so dragging the canvas looks around, and the on-screen
  *   joystick (`moveRef`) and jump button (`jumpRef`) supply the rest — all combined, like spectator.
  *
- * Gravity always runs, including before the pointer is captured, so the player has already settled
- * onto the build by the time the user clicks in.
+ * Double-tapping Space (or the jump button) toggles creative flight / NoClip: no gravity, no collision,
+ * Space up and Shift down, so the player can hover and pass through blocks to explore a hollow build.
+ * Double-tapping again is the landing — collision returns and gravity drops the player onto whatever
+ * is below (see `setFlying`).
+ *
+ * Gravity always runs while walking, including before the pointer is captured, so the player has
+ * already settled onto the build by the time the user clicks in.
  */
 export function WalkRig({
   grid,
-  unit,
   moveRef,
   jumpRef,
+  descendRef,
   onLockChange,
+  onFlyChange,
 }: {
   grid: VoxelGrid;
-  /** Voxels per Minecraft block (the resolution) — sizes the player, its speed and its jump. */
-  unit: number;
   moveRef: RefObject<WalkInput>;
   jumpRef: RefObject<boolean>;
+  descendRef: RefObject<boolean>;
   onLockChange: (locked: boolean) => void;
+  onFlyChange: (flying: boolean) => void;
 }) {
   const { camera, gl } = useThree();
-  const dims = useMemo(() => playerDims(unit), [unit]);
+  const dims = DIMS;
   const isSolid = useMemo<SolidFn>(() => (x, y, z) => getVoxel(grid, x, y, z) !== null, [grid]);
   const player = useRef<PlayerState>(spawnAboveCenter(grid.sizeX, grid.sizeY, grid.sizeZ));
   const look = useRef({ yaw: 0, pitch: 0 });
   const keys = useRef(new Set<string>());
   const locked = useRef(false);
   const touchDrag = useRef<{ id: number; x: number; y: number } | null>(null);
+  const lastTap = useRef<number | null>(null);
+  const wasJumpHeld = useRef(false);
 
   useEffect(() => {
     player.current = spawnAboveCenter(grid.sizeX, grid.sizeY, grid.sizeZ);
-  }, [grid]);
+    onFlyChange(false);
+  }, [grid, onFlyChange]);
 
   // The preview camera is framed for orbiting from outside; walking needs a wider view, and a near
   // plane sized to the player (a voxel is 1 unit, the eye is dozens of units up) with a far plane
@@ -87,10 +103,10 @@ export function WalkRig({
   useEffect(() => {
     if (!(camera instanceof THREE.PerspectiveCamera)) return;
     camera.fov = FIELD_OF_VIEW;
-    camera.near = unit * 0.05;
-    camera.far = Math.max(grid.sizeX, grid.sizeY, grid.sizeZ) * 8 + unit * 10;
+    camera.near = 0.05;
+    camera.far = Math.max(grid.sizeX, grid.sizeY, grid.sizeZ) * 8 + 10;
     camera.updateProjectionMatrix();
-  }, [camera, grid, unit]);
+  }, [camera, grid]);
 
   useEffect(() => {
     const dom = gl.domElement;
@@ -162,8 +178,9 @@ export function WalkRig({
       if (document.pointerLockElement === dom) document.exitPointerLock();
       locked.current = false;
       onLockChange(false);
+      onFlyChange(false);
     };
-  }, [gl, onLockChange]);
+  }, [gl, onLockChange, onFlyChange]);
 
   useFrame((_, delta) => {
     let strafe = moveRef.current.x;
@@ -174,11 +191,27 @@ export function WalkRig({
       strafe += v[0];
       forward += v[1];
     }
+    const jumpHeld = keys.current.has('Space') || jumpRef.current;
+
+    // A press (the frame Space or the jump button goes down) is a tap; two quick ones toggle flight.
+    // Detected here, from the held state, so the keyboard and the touch button share one path and
+    // key auto-repeat can't count as taps.
+    if (jumpHeld && !wasJumpHeld.current) {
+      const tap = detectDoubleTap(lastTap.current, performance.now());
+      lastTap.current = tap.next;
+      if (tap.isDouble) {
+        player.current = setFlying(player.current, !player.current.flying, isSolid, dims);
+        onFlyChange(player.current.flying);
+      }
+    }
+    wasJumpHeld.current = jumpHeld;
+
     const input = {
       strafe: Math.max(-1, Math.min(1, strafe)),
       forward: Math.max(-1, Math.min(1, forward)),
       yaw: look.current.yaw,
-      jump: keys.current.has('Space') || jumpRef.current,
+      jump: jumpHeld,
+      descend: DESCEND_KEYS.some((code) => keys.current.has(code)) || descendRef.current,
     };
 
     let next = stepPlayer(player.current, input, delta, isSolid, dims);

@@ -4,8 +4,13 @@
  *
  * Space: "physics space" has voxel (x, y, z) occupying [x, x+1) × [y, y+1) × [z, z+1), y up. The
  * preview draws that voxel centred at `x - sizeX/2 + 0.5`, so `render = physics - size/2` on each
- * axis (see `physicsToRender`). One voxel is 1/`unit` of a Minecraft block (`unit` = the
- * resolution: 16/32/48/64 voxels per block), so every real-world size below is multiplied by `unit`.
+ * axis (see `physicsToRender`).
+ *
+ * Scale: the player is always a real Minecraft player, 1.8 blocks tall, in *world* blocks — and an
+ * exported build places every voxel as one real block, so a voxel is exactly one block here
+ * regardless of the resolution the build was made at (`playerDims(1)`). A 64³ megablock is simply a
+ * much bigger place to stand in, not a reason to make the player bigger. `playerDims` still takes a
+ * `unit` (voxels per block) so the same maths can be tested at other scales.
  *
  * Collision is an exact per-axis *sweep* rather than "move, then test, then back off": for a move of
  * `d` along one axis it walks the layers of cells the box is about to enter, in order, and stops at
@@ -27,6 +32,9 @@ export interface PlayerDims {
   /** The tallest ledge walked up without jumping (a slab, a 1-voxel stair, a redstone wire). */
   stepHeight: number;
   walkSpeed: number;
+  /** Creative-flight speeds: horizontal, and up/down. */
+  flySpeed: number;
+  flyVerticalSpeed: number;
   gravity: number;
   jumpSpeed: number;
   terminalSpeed: number;
@@ -37,6 +45,9 @@ export interface PlayerState {
   pos: Vec3;
   vy: number;
   onGround: boolean;
+  /** Creative flight / NoClip: no gravity and no collision, so the player can hover and pass through
+   *  blocks to look around inside a hollow build. Turned on and off with `setFlying`. */
+  flying: boolean;
 }
 
 export interface PlayerInput {
@@ -46,7 +57,10 @@ export interface PlayerInput {
   strafe: number;
   /** Radians, the same yaw a Three.js camera uses (0 looks toward -Z, positive turns left). */
   yaw: number;
+  /** Jump while walking; ascend while flying. */
   jump: boolean;
+  /** Descend while flying (ignored on the ground — there is no sneaking). */
+  descend?: boolean;
 }
 
 // Real Minecraft numbers (blocks, seconds): 0.6 wide, 1.8 tall, eyes at 1.62, walk 4.317 b/s,
@@ -61,6 +75,8 @@ export function playerDims(unit: number): PlayerDims {
     eyeHeight: 1.62 * unit,
     stepHeight: 0.6 * unit,
     walkSpeed: 4.317 * unit,
+    flySpeed: 10.89 * unit,
+    flyVerticalSpeed: 7.5 * unit,
     gravity: GRAVITY_BLOCKS * unit,
     jumpSpeed: Math.sqrt(2 * GRAVITY_BLOCKS * JUMP_HEIGHT_BLOCKS) * unit,
     terminalSpeed: 78 * unit,
@@ -78,12 +94,12 @@ const GROUND_PROBE = 0.05;
 /** Where the player is dropped: above the centre of the grid, higher than any block, so it can never
  *  start inside a solid and simply falls onto whatever is there. */
 export function spawnAboveCenter(sizeX: number, sizeY: number, sizeZ: number): PlayerState {
-  return { pos: [sizeX / 2, sizeY + 2, sizeZ / 2], vy: 0, onGround: false };
+  return { pos: [sizeX / 2, sizeY + 2, sizeZ / 2], vy: 0, onGround: false, flying: false };
 }
 
 /** Whether the player has fallen far enough below the grid to be put back at the spawn point. */
 export function fellOutOfWorld(state: PlayerState, dims: PlayerDims): boolean {
-  return state.pos[1] < -dims.height * 3;
+  return !state.flying && state.pos[1] < -dims.height * 3;
 }
 
 export function physicsToRender(pos: Vec3, sizeX: number, sizeY: number, sizeZ: number): Vec3 {
@@ -144,6 +160,53 @@ function sweep(pos: Vec3, ext: Extents, axis: number, d: number, isSolid: SolidF
   return { moved: d, blocked: false };
 }
 
+/** Whether the player's box overlaps any solid cell at `pos`. */
+function overlapsSolid(pos: Vec3, ext: Extents, isSolid: SolidFn): boolean {
+  const min = [0, 1, 2].map((a) => Math.floor(pos[a] - ext.lo[a] + EPS));
+  const max = [0, 1, 2].map((a) => Math.ceil(pos[a] + ext.hi[a] - EPS) - 1);
+  for (let x = min[0]; x <= max[0]; x++)
+    for (let y = min[1]; y <= max[1]; y++)
+      for (let z = min[2]; z <= max[2]; z++) if (isSolid(x, y, z)) return true;
+  return false;
+}
+
+const EJECT_DIRECTIONS: Vec3[] = [
+  [0, 1, 0],
+  [0, -1, 0],
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 0, 1],
+  [0, 0, -1],
+];
+const EJECT_STEP = 0.1;
+const EJECT_MAX_DISTANCE = 16;
+
+/** Nearest position to `pos` where the player's box overlaps nothing (straight up wins a tie), or
+ *  `pos` unchanged if there is none within reach. */
+function ejectFromSolids(pos: Vec3, ext: Extents, isSolid: SolidFn): Vec3 {
+  if (!overlapsSolid(pos, ext, isSolid)) return pos;
+  for (let r = EJECT_STEP; r <= EJECT_MAX_DISTANCE; r += EJECT_STEP) {
+    for (const [dx, dy, dz] of EJECT_DIRECTIONS) {
+      const candidate: Vec3 = [pos[0] + dx * r, pos[1] + dy * r, pos[2] + dz * r];
+      if (!overlapsSolid(candidate, ext, isSolid)) return candidate;
+    }
+  }
+  return pos;
+}
+
+/**
+ * Turns creative flight / NoClip on or off. Switching it off is the landing: collision is back, so a
+ * player who was left inside a wall while noclipping is first moved to the nearest free space (else
+ * they'd be stuck inside it), then gravity takes over and drops them onto whatever is below — the
+ * normal sweep stops them flush on top of it.
+ */
+export function setFlying(state: PlayerState, flying: boolean, isSolid: SolidFn, dims: PlayerDims): PlayerState {
+  if (state.flying === flying) return state;
+  if (flying) return { pos: [...state.pos], vy: 0, onGround: false, flying: true };
+  const pos = ejectFromSolids([...state.pos], extentsOf(dims), isSolid);
+  return { pos, vy: 0, onGround: false, flying: false };
+}
+
 /** A horizontal move along `axis`. When it is blocked and the player is standing, tries to step up
  *  onto the obstacle: lift by up to `stepHeight`, carry on with the rest of the move, then settle
  *  back down onto whatever is underneath. Abandoned (position restored) if the lifted move gets
@@ -184,6 +247,18 @@ export function stepPlayer(state: PlayerState, input: PlayerInput, dt: number, i
   const wx = input.forward * -sin + input.strafe * cos;
   const wz = input.forward * -cos + input.strafe * -sin;
   const len = Math.hypot(wx, wz);
+
+  // Creative flight / NoClip: hover, no collision, faster horizontally, Space up and Shift down.
+  if (state.flying) {
+    if (len > 0) {
+      const scale = (dims.flySpeed * t) / Math.max(1, len);
+      pos[0] += wx * scale;
+      pos[2] += wz * scale;
+    }
+    pos[1] += ((input.jump ? 1 : 0) - (input.descend ? 1 : 0)) * dims.flyVerticalSpeed * t;
+    return { pos, vy: 0, onGround: false, flying: true };
+  }
+
   if (len > 0) {
     const scale = (dims.walkSpeed * t) / Math.max(1, len);
     moveHorizontal(pos, ext, dims, 0, wx * scale, state.onGround, isSolid);
@@ -198,5 +273,5 @@ export function stepPlayer(state: PlayerState, input: PlayerInput, dt: number, i
   if (fall.blocked) vy = 0;
 
   const onGround = vy <= 0 && sweep(pos, ext, 1, -GROUND_PROBE, isSolid).blocked;
-  return { pos, vy, onGround };
+  return { pos, vy, onGround, flying: false };
 }

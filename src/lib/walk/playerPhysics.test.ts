@@ -4,6 +4,7 @@ import {
   fellOutOfWorld,
   physicsToRender,
   playerDims,
+  setFlying,
   spawnAboveCenter,
   stepPlayer,
   type PlayerInput,
@@ -21,7 +22,7 @@ const YAW_EAST = -Math.PI / 2;
 const YAW_SOUTH = Math.PI;
 
 const floor: SolidFn = (_x, y) => y >= 0 && y < FLOOR_TOP;
-const onFloor = (x = 20, z = 20): PlayerState => ({ pos: [x, FLOOR_TOP, z], vy: 0, onGround: true });
+const onFloor = (x = 20, z = 20): PlayerState => ({ pos: [x, FLOOR_TOP, z], vy: 0, onGround: true, flying: false });
 
 function run(state: PlayerState, input: PlayerInput, seconds: number, isSolid: SolidFn, dt = 1 / 60): PlayerState {
   let s = state;
@@ -29,7 +30,16 @@ function run(state: PlayerState, input: PlayerInput, seconds: number, isSolid: S
   return s;
 }
 
+import { detectDoubleTap } from './doubleTap';
+
 describe('playerDims', () => {
+  it('is a real Minecraft player in world blocks at unit 1: 1.8 tall, eyes at 1.62 (a voxel is one block once exported, whatever the resolution)', () => {
+    const real = playerDims(1);
+    expect(real.height).toBeCloseTo(1.8);
+    expect(real.eyeHeight).toBeCloseTo(1.62);
+    expect(real.halfWidth).toBeCloseTo(0.3);
+  });
+
   it('scales every real-world size by the voxels-per-block unit', () => {
     const one = playerDims(1);
     const big = playerDims(64);
@@ -41,7 +51,7 @@ describe('playerDims', () => {
 
 describe('gravity and landing', () => {
   it('falls onto a floor and comes to rest exactly on top of it', () => {
-    const s = run({ pos: [20, 40, 20], vy: 0, onGround: false }, still, 2, floor);
+    const s = run({ pos: [20, 40, 20], vy: 0, onGround: false, flying: false }, still, 2, floor);
     expect(s.pos[1]).toBeCloseTo(FLOOR_TOP, 5);
     expect(s.vy).toBe(0);
     expect(s.onGround).toBe(true);
@@ -49,7 +59,7 @@ describe('gravity and landing', () => {
 
   it('cannot tunnel through a one-voxel floor at terminal speed, even with the longest allowed frame', () => {
     const thin: SolidFn = (_x, y) => y === 0;
-    let s: PlayerState = { pos: [20, 5000, 20], vy: 0, onGround: false };
+    let s: PlayerState = { pos: [20, 5000, 20], vy: 0, onGround: false, flying: false };
     for (let i = 0; i < 400 && !s.onGround; i++) s = stepPlayer(s, still, 0.05, thin, dims);
     expect(s.onGround).toBe(true);
     expect(s.pos[1]).toBeCloseTo(1, 5);
@@ -190,7 +200,7 @@ describe('spawn, void and coordinates', () => {
   });
 
   it('flags a player who has fallen well below the grid', () => {
-    expect(fellOutOfWorld({ pos: [0, -1000, 0], vy: 0, onGround: false }, dims)).toBe(true);
+    expect(fellOutOfWorld({ pos: [0, -1000, 0], vy: 0, onGround: false, flying: false }, dims)).toBe(true);
     expect(fellOutOfWorld(onFloor(), dims)).toBe(false);
   });
 
@@ -211,5 +221,136 @@ describe('spawn, void and coordinates', () => {
       const s = stepPlayer(onFloor(), { forward: 1, strafe: 1, yaw: 1, jump: true }, dt, floor, dims);
       expect(s.pos.every(Number.isFinite)).toBe(true);
     }
+  });
+});
+
+describe('creative flight / noclip', () => {
+  const wallSolid: SolidFn = (x, y) => (y >= 0 && y < FLOOR_TOP) || (x >= 30 && x < 34 && y >= 0 && y < 80);
+  const flyingAt = (x: number, y: number, z: number): PlayerState => ({ pos: [x, y, z], vy: 0, onGround: false, flying: true });
+
+  it('hovers: no gravity while flying', () => {
+    const s = run(flyingAt(20, 40, 20), still, 2, floor);
+    expect(s.pos[1]).toBeCloseTo(40, 6);
+    expect(s.flying).toBe(true);
+    expect(s.onGround).toBe(false);
+  });
+
+  it('flies up with jump and down with descend, at the flying vertical speed', () => {
+    const up = run(flyingAt(20, 40, 20), { ...still, jump: true }, 1, floor);
+    expect(up.pos[1] - 40).toBeCloseTo(dims.flyVerticalSpeed, 1);
+    const down = run(flyingAt(20, 40, 20), { ...still, descend: true }, 1, floor);
+    expect(40 - down.pos[1]).toBeCloseTo(dims.flyVerticalSpeed, 1);
+  });
+
+  it('flies horizontally faster than it walks', () => {
+    const s = run(flyingAt(100, 40, 100), { ...still, forward: 1 }, 1, floor);
+    expect(100 - s.pos[2]).toBeCloseTo(dims.flySpeed, 1);
+    expect(dims.flySpeed).toBeGreaterThan(dims.walkSpeed);
+  });
+
+  it('passes straight through walls and the floor (noclip)', () => {
+    const through = run(flyingAt(20, 30, 20), { ...still, forward: 1, yaw: YAW_EAST }, 3, wallSolid);
+    expect(through.pos[0]).toBeGreaterThan(40);
+    const down = run(flyingAt(20, 30, 20), { ...still, descend: true }, 2, floor);
+    expect(down.pos[1]).toBeLessThan(FLOOR_TOP - 5);
+  });
+
+  it('does not fall out of the world while flying below the grid', () => {
+    expect(fellOutOfWorld(flyingAt(0, -1000, 0), dims)).toBe(false);
+  });
+
+  it('switching flight off in mid-air drops the player onto the floor and lands exactly on top', () => {
+    let s = setFlying(flyingAt(20, 60, 20), false, floor, dims);
+    expect(s.flying).toBe(false);
+    s = run(s, still, 3, floor);
+    expect(s.onGround).toBe(true);
+    expect(s.pos[1]).toBeCloseTo(FLOOR_TOP, 5);
+  });
+
+  it('switching flight off inside a wall moves the player to the nearest free space, not stuck in the block', () => {
+    const inside = flyingAt(32, 40, 20);
+    const s = setFlying(inside, false, wallSolid, dims);
+    // nothing overlaps at the new position
+    const stuck = run(s, still, 0.001, wallSolid);
+    expect(stuck.pos.every(Number.isFinite)).toBe(true);
+    const landed = run(s, still, 3, wallSolid);
+    expect(landed.onGround).toBe(true);
+    const halfW = dims.halfWidth;
+    const insideWall = landed.pos[0] + halfW > 30 + 1e-6 && landed.pos[0] - halfW < 34 - 1e-6 && landed.pos[1] < 80;
+    expect(insideWall).toBe(false);
+  });
+
+  it('turning flight on keeps the position and clears vertical speed; turning it on twice is a no-op', () => {
+    const falling: PlayerState = { pos: [20, 30, 20], vy: -50, onGround: false, flying: false };
+    const on = setFlying(falling, true, floor, dims);
+    expect(on.flying).toBe(true);
+    expect(on.vy).toBe(0);
+    expect(on.pos).toEqual([20, 30, 20]);
+    expect(setFlying(on, true, floor, dims)).toBe(on);
+  });
+});
+
+describe('detectDoubleTap', () => {
+  it('a second tap inside the window is a double-tap and is consumed', () => {
+    const first = detectDoubleTap(null, 1000);
+    expect(first).toEqual({ isDouble: false, next: 1000 });
+    const second = detectDoubleTap(first.next, 1200);
+    expect(second).toEqual({ isDouble: true, next: null });
+    expect(detectDoubleTap(second.next, 1250).isDouble).toBe(false); // a third quick tap starts a new pair
+  });
+
+  it('a slow second tap is just a new first tap', () => {
+    expect(detectDoubleTap(1000, 1500)).toEqual({ isDouble: false, next: 1500 });
+  });
+});
+
+describe('at real Minecraft scale (1 voxel = 1 block, the scale the walk mode actually uses)', () => {
+  const real = playerDims(1);
+  const runReal = (state: PlayerState, input: PlayerInput, seconds: number, isSolid: SolidFn, dt = 1 / 60) => {
+    let s = state;
+    for (let t = 0; t < seconds - 1e-9; t += dt) s = stepPlayer(s, input, dt, isSolid, real);
+    return s;
+  };
+  const stand = (x: number, z: number): PlayerState => ({ pos: [x, FLOOR_TOP, z], vy: 0, onGround: true, flying: false });
+  const walkEast: PlayerInput = { forward: 1, strafe: 0, yaw: YAW_EAST, jump: false };
+
+  // A wall across x = 30..31 with a doorway `height` blocks tall cut out of it, on a floor of y < 10.
+  const doorway = (height: number): SolidFn => (x, y) =>
+    (y >= 0 && y < FLOOR_TOP) || (x >= 30 && x < 32 && y >= FLOOR_TOP + height && y < 60);
+
+  it('walks through a two-block-high doorway (the player is 1.8 tall) but not a one-block-high one', () => {
+    expect(runReal(stand(20, 20), walkEast, 4, doorway(2)).pos[0]).toBeGreaterThan(32);
+    expect(runReal(stand(20, 20), walkEast, 4, doorway(1)).pos[0]).toBeLessThan(30);
+  });
+
+  it('is stopped by a one-block ledge (the step-up is only 0.6) but can jump up onto it (a jump peaks at 1.25)', () => {
+    const ledge: SolidFn = (x, y) => (y >= 0 && y < FLOOR_TOP) || (x >= 30 && y >= FLOOR_TOP && y < FLOOR_TOP + 1);
+    const walked = runReal(stand(20, 20), walkEast, 3, ledge);
+    expect(walked.pos[0]).toBeCloseTo(30 - real.halfWidth, 4);
+    expect(walked.pos[1]).toBeCloseTo(FLOOR_TOP, 5);
+
+    // One press of jump (holding it would bunny-hop forever), then just keep walking.
+    // Jumped from about a block short of the ledge: a jump only carries a couple of blocks forward.
+    const launched = stepPlayer(stand(28.8, 20), { ...walkEast, jump: true }, 1 / 60, ledge, real);
+    const jumped = runReal(launched, walkEast, 3, ledge);
+    expect(jumped.pos[0]).toBeGreaterThan(30);
+    expect(jumped.pos[1]).toBeCloseTo(FLOOR_TOP + 1, 5);
+    expect(jumped.onGround).toBe(true);
+  });
+
+  it('cannot jump onto a two-block wall', () => {
+    const wall2: SolidFn = (x, y) => (y >= 0 && y < FLOOR_TOP) || (x >= 30 && y >= FLOOR_TOP && y < FLOOR_TOP + 2);
+    expect(runReal(stand(20, 20), { ...walkEast, jump: true }, 3, wall2).pos[0]).toBeLessThan(30);
+  });
+
+  it('flying lets the same player clip through that wall and, on landing, come down on top of it', () => {
+    const wall2: SolidFn = (x, y) => (y >= 0 && y < FLOOR_TOP) || (x >= 30 && x < 34 && y >= FLOOR_TOP && y < FLOOR_TOP + 2);
+    let s = setFlying(stand(20, 20), true, wall2, real);
+    s = runReal(s, walkEast, 2, wall2); // 21.8 blocks east through the wall
+    expect(s.pos[0]).toBeGreaterThan(34);
+    s = setFlying({ ...s, pos: [31.5, FLOOR_TOP + 0.2, 20] }, false, wall2, real); // switch off while inside it
+    s = runReal(s, { forward: 0, strafe: 0, yaw: 0, jump: false }, 3, wall2);
+    expect(s.onGround).toBe(true);
+    expect(s.pos[1]).toBeGreaterThanOrEqual(FLOOR_TOP + 2 - 1e-6); // ended on top of the wall, not inside it
   });
 });
