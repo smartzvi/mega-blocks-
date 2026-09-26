@@ -40,6 +40,7 @@ export function buildPalette(extractedTextures: Map<string, BlockTextureSet>): P
       endGrainTopBottom: def.endGrainTopBottom,
       glassOnly: def.glassOnly,
       earthOnly: def.earthOnly,
+      resinOnly: def.resinOnly,
       lightSource: def.lightSource,
     });
   }

@@ -31,6 +31,11 @@ export interface FullCubeBlockDef {
    *  builds. `filterPaletteForSource` (glassSource.ts) strips every `earthOnly` entry unless the
    *  selected source is earth-family (earthSource.ts). Same gating idea as `glassOnly`. */
   earthOnly?: boolean;
+  /** Real resin block, offered only to the `lava` item build (its surface layer is pinned to it by
+   *  handAuthoredTemplates.ts). As general filler its mottled orange texture clashes with smooth
+   *  orange concrete/wool — see the shroomlight note in the light-sources section below — so
+   *  `filterPaletteForSource` (glassSource.ts) strips it for every other source. */
+  resinOnly?: boolean;
   /** A real light-emitting block (glowstone, sea_lantern — the froglights were removed outright
    *  per explicit user request, see the light-sources section below). Unlike `glassOnly`,
    *  this isn't restricted to a specific source family — it's eligible everywhere by default, but
@@ -53,7 +58,7 @@ const OVERWORLD_WOODS = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak
 function block(
   name: string,
   family: MaterialFamily,
-  flags?: Pick<FullCubeBlockDef, 'gravityAffected' | 'endGrainTopBottom' | 'glassOnly' | 'earthOnly' | 'lightSource'> & {
+  flags?: Pick<FullCubeBlockDef, 'gravityAffected' | 'endGrainTopBottom' | 'glassOnly' | 'earthOnly' | 'resinOnly' | 'lightSource'> & {
     textureBase?: string;
   }
 ): FullCubeBlockDef {
@@ -146,6 +151,9 @@ export const FULL_CUBE_BLOCKS: FullCubeBlockDef[] = [
   // dirt (confirmed against the real jar). Only offered to dirt/grass-family sources — see the
   // `earthOnly` doc on FullCubeBlockDef.
   block('dirt', 'wood_earth', { earthOnly: true }), block('coarse_dirt', 'wood_earth', { earthOnly: true }),
+
+  // Real resin, gated `resinOnly` — only the lava item build ever sees it (see its field doc).
+  block('resin_block', 'neutrals_concrete', { resinOnly: true }),
 
   // Real light sources — so a build with warm/glowing-colored pixels (a lantern, a torch, a
   // glowing item, ...) can come out of blocks that actually emit light in-game too, not just

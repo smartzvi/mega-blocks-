@@ -18,7 +18,8 @@ export function isGlassFamilySource(sourceName: string): boolean {
   // request for a translucent wing look — safe to make the whole bee build glass-eligible since
   // every other bee element already has its own tight, non-glass color restriction, so only the
   // wings can actually reach it.
-  return bare.includes('glass') || bare === 'beacon' || bare === 'end_crystal' || bare === 'bee';
+  // `water`'s surface layer is pinned to blue_stained_glass (handAuthoredTemplates.ts).
+  return bare.includes('glass') || bare === 'beacon' || bare === 'end_crystal' || bare === 'bee' || bare === 'water';
 }
 
 /**
@@ -31,8 +32,9 @@ export function isGlassFamilySource(sourceName: string): boolean {
 export function filterPaletteForSource(palette: PaletteEntry[], sourceName: string): PaletteEntry[] {
   const allowGlass = isGlassFamilySource(sourceName);
   const allowEarth = isEarthFamilySource(sourceName);
-  if (!allowGlass || !allowEarth) {
-    palette = palette.filter((entry) => (allowGlass || !entry.glassOnly) && (allowEarth || !entry.earthOnly));
+  const allowResin = sourceName.toLowerCase().replace(/^minecraft:/, '') === 'lava';
+  if (!allowGlass || !allowEarth || !allowResin) {
+    palette = palette.filter((entry) => (allowGlass || !entry.glassOnly) && (allowEarth || !entry.earthOnly) && (allowResin || !entry.resinOnly));
   }
   // A soil texture is brown noise, and the nearest palette blocks to it by raw color are wood
   // planks and logs — confirmed against the real jar: `dirt` came out ~45% jungle/spruce wood. For

@@ -699,7 +699,31 @@ function template(model: BlockModel, depthUnits = 16, elementPaletteRestrictions
  *  entirely — see skullModel's own precedent). Chest/trapped_chest are the one exception: a real
  *  double chest's `type=left`/`type=right` + `facing` determine which half-shape to build (see
  *  chestTemplateFor), so those two entries are functions instead of plain templates. */
-export type HandAuthoredTemplateEntry = HandAuthoredTemplate | ((properties?: Record<string, string>) => HandAuthoredTemplate);
+export type HandAuthoredTemplateEntry = HandAuthoredTemplate | ((properties?: Record<string, string>) => HandAuthoredTemplate | undefined);
+
+const FLUID_SURFACE_BLOCK_IDS = { water: 'minecraft:blue_stained_glass', lava: 'minecraft:resin_block' } as const;
+
+/**
+ * Water and lava have no model JSON at all (their blockstate points at an empty model), so Item mode
+ * rejected both. Per explicit request, each is drawn as just its top layer — one full-footprint slab
+ * at the top of the cell — pinned to a single real block (blue stained glass for water, resin block
+ * for lava; both pinned via `elementPaletteRestrictions`, so the placeholder texture's own colour
+ * never affects the result — a fully opaque concrete tile stands in for it, since a fluid's real
+ * animated texture is neither opaque nor a plain tile).
+ *
+ * Only for a bare item-mode pick: a structure's water/lava always carries a real `level` property, and
+ * stamping this slab into every cell of a deep pool would stack floating sheets. `undefined` there
+ * lets buildStructureBlockStamp keep its flat-cube fallback for fluids, as before.
+ */
+function fluidSurfaceTemplate(fluid: keyof typeof FLUID_SURFACE_BLOCK_IDS, textureKey: string, properties?: Record<string, string>): HandAuthoredTemplate | undefined {
+  if (properties !== undefined) return undefined;
+  return {
+    model: { textures: { main: textureKey }, elements: [stretchedBox([0, 15, 0], [16, 16, 16], [0, 0, 16, 16], 'main')] },
+    heightUnits: 16,
+    depthUnits: 16,
+    elementPaletteRestrictions: { 0: [FLUID_SURFACE_BLOCK_IDS[fluid]] },
+  };
+}
 
 export const HAND_AUTHORED_TEMPLATES: Record<string, HandAuthoredTemplateEntry> = {
   // Element 7 is the crystal (see beaconModel: 6 shell panels [0-5] + obsidian frame [6] + crystal [7]).
@@ -782,6 +806,8 @@ export const HAND_AUTHORED_TEMPLATES: Record<string, HandAuthoredTemplateEntry> 
   // blockstate/model JSON: its moving arm uses the same unparsed per-element `rotation` feature
   // ascending rails do.
   lever: (properties) => leverTemplateFor(properties),
+  water: (properties) => fluidSurfaceTemplate('water', 'blue_concrete', properties),
+  lava: (properties) => fluidSurfaceTemplate('lava', 'orange_concrete', properties),
 };
 
 /** Looks up and resolves an entry from HAND_AUTHORED_TEMPLATES, calling it with `properties` if

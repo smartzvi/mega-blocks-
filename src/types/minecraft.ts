@@ -49,6 +49,8 @@ export interface PaletteEntry {
   /** See FullCubeBlockDef's `earthOnly` doc — carried through so callers can strip dirt out of the
    *  palette for any source that isn't itself dirt/grass-family (glassSource.ts). */
   earthOnly?: boolean;
+  /** See FullCubeBlockDef's `resinOnly` doc — stripped for every source except lava (glassSource.ts). */
+  resinOnly?: boolean;
   /** See FullCubeBlockDef's `lightSource` doc — carried through so callers can strip light
    *  sources out of the palette for specific sources they look bad in (lightSourceExclusion.ts). */
   lightSource?: boolean;
