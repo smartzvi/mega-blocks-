@@ -70,6 +70,7 @@ const NON_OCCLUDING_PATTERNS = [
 // Names that would also match a full block as a substring (snow_block, nether_wart_block,
 // red_mushroom_block, ...), so they are matched whole instead.
 const NON_OCCLUDING_EXACT = new Set([
+  'moving_piston', // rendered as a piston head (thin plate plus a rod), not a full cube
   'snow',
   'nether_wart',
   'brown_mushroom',

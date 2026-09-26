@@ -1,7 +1,7 @@
 import type { BlockModel, BlockModelElement } from '../../types/item';
 import { findTwoPartVariantKeys, resolveBlockStateModelRefs, type BlockStateModelRef } from '../blockstate/parseBlockState';
 import { resolveModelFile } from './resolveModelFile';
-import { rotateElementX, rotateElementY, shiftElementY } from './rotateElement';
+import { rotateElementX, rotateElementY, shiftElementY, type YRotation } from './rotateElement';
 import { texturePathToKey } from './resolveTextureVariable';
 
 type FileLoaderMap = Map<string, () => Promise<Uint8Array>>;
@@ -70,8 +70,30 @@ async function resolveSingleRef(ref: BlockStateModelRef, modelFiles: FileLoaderM
   const modelKey = texturePathToKey(ref.model);
   const model = await resolveModelFile(modelKey, modelFiles);
   const source = BARS_PART_MODEL.test(ref.model) ? dropBarsCapBoxes(model.elements) : model.elements;
-  const elements = source.map((el) => rotateElementY(rotateElementX(el, ref.x), ref.y));
+  let elements = source.map((el) => rotateElementY(rotateElementX(el, ref.x), ref.y));
+  if (REDSTONE_DUST_PART_MODEL.test(ref.model) && ref.y !== 0) elements = elements.map((el) => turnFlatFaceTextures(el, ref.y));
   return { elements, textures: model.textures };
+}
+
+/** Redstone wire's part models (`redstone_dust_side0`, `redstone_dust_up`, ...). */
+const REDSTONE_DUST_PART_MODEL = /redstone_dust_/;
+
+/**
+ * rotateElementY relabels a box's side faces but never turns a top/bottom face's own texture — in
+ * the game a blockstate y-rotation turns that texture with the block. Redstone wire is where it
+ * shows: its east and west arms are the north arm's model turned 90/270 degrees, and the line
+ * texture printed on the arm's flat top has to turn with it. Without this every east-west wire was
+ * drawn with its line running north-south, crosswise to the arm. Scoped to redstone wire on purpose:
+ * doing it for every y-rotated block would change how every rotated furnace, log and stair top
+ * samples (see CLAUDE.md on this file's blast radius).
+ */
+function turnFlatFaceTextures(el: BlockModelElement, degrees: YRotation): BlockModelElement {
+  const faces: BlockModelElement['faces'] = { ...el.faces };
+  for (const face of ['top', 'bottom'] as const) {
+    const def = faces[face];
+    if (def) faces[face] = { ...def, uvRotation: degrees };
+  }
+  return { from: el.from, to: el.to, faces };
 }
 
 /** Prefixes every texture variable name (and every "#var" reference to one) with `prefix`, so

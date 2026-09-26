@@ -88,8 +88,15 @@ export async function buildItemVoxelGrid(
   options?: { rejectMultiCell?: boolean; properties?: Record<string, string>; suppressedFaces?: ReadonlySet<FaceName> }
 ): Promise<VoxelGrid> {
   const handAuthored = resolveHandAuthoredTemplate(itemName, options?.properties);
+  // `moving_piston` is only a placeholder — its blockstate points at an empty model, since the game
+  // draws whatever is mid-motion from a block entity. Rendered as the piston head being pushed out,
+  // in the placeholder's own facing/type (a save caught mid-extension), fully extended.
+  const resolved =
+    itemName === 'moving_piston'
+      ? { name: 'piston_head', properties: { facing: options?.properties?.facing ?? 'north', type: options?.properties?.type ?? 'normal', short: 'false' } }
+      : { name: itemName, properties: options?.properties };
   const { model, heightUnits, depthUnits } =
-    handAuthored ?? (await resolveItemModel(itemName, blockStateFiles, modelFiles, options?.properties));
+    handAuthored ?? (await resolveItemModel(resolved.name, blockStateFiles, modelFiles, resolved.properties));
 
   if (options?.rejectMultiCell && (heightUnits !== 16 || depthUnits !== 16)) {
     throw new MultiCellBlockError(`"${itemName}" spans more than one block (height/depth ${heightUnits}/${depthUnits}) and can't be voxelized as a single structure cell.`);

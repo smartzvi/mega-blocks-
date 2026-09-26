@@ -69,6 +69,21 @@ function resolveFaceColor(
   if (uFlip) uT = 1 - uT;
   if (vFlip) vT = 1 - vT;
 
+  // Optional in-plane turn of the texture on this face, clockwise (vanilla's face `rotation`, and
+  // what a blockstate y-rotation does to a top face's texture). Absent everywhere except the few
+  // models that set it explicitly, so every other model samples exactly as before.
+  switch (faceDef.uvRotation) {
+    case 90:
+      [uT, vT] = [vT, 1 - uT];
+      break;
+    case 180:
+      [uT, vT] = [1 - uT, 1 - vT];
+      break;
+    case 270:
+      [uT, vT] = [1 - vT, uT];
+      break;
+  }
+
   const [u1, v1, u2, v2] = faceDef.uv;
   const u = u1 + uT * (u2 - u1);
   const v = v1 + vT * (v2 - v1);

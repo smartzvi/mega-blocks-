@@ -5,7 +5,7 @@ export interface BlockModelElement {
   from: [number, number, number];
   to: [number, number, number];
   /** Only faces with an explicit UV rect are supported (see parseBlockModel.ts). */
-  faces: Partial<Record<FaceName, { uv: [number, number, number, number]; texture: string }>>;
+  faces: Partial<Record<FaceName, { uv: [number, number, number, number]; texture: string; uvRotation?: 0 | 90 | 180 | 270 }>>;
 }
 
 /** A self-contained block model (no `parent` chain) — see parseBlockModel.ts for scope. */
