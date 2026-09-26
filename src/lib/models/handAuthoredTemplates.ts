@@ -701,7 +701,7 @@ function template(model: BlockModel, depthUnits = 16, elementPaletteRestrictions
  *  chestTemplateFor), so those two entries are functions instead of plain templates. */
 export type HandAuthoredTemplateEntry = HandAuthoredTemplate | ((properties?: Record<string, string>) => HandAuthoredTemplate | undefined);
 
-const FLUID_SURFACE_BLOCK_IDS = { water: 'minecraft:blue_stained_glass', lava: 'minecraft:resin_block' } as const;
+export const FLUID_SURFACE_BLOCK_IDS = { water: 'minecraft:blue_stained_glass', lava: 'minecraft:resin_block' } as const;
 
 /**
  * Water and lava have no model JSON at all (their blockstate points at an empty model), so Item mode

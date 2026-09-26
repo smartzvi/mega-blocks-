@@ -2,6 +2,7 @@ import type { FaceName, FaceTexture, PaletteEntry, VoxelGrid } from '../../types
 import { averageColorHsv, averageColorLab } from '../color/averageColor';
 import { matchPixel } from '../matching/matchFace';
 import { buildItemVoxelGrid, type TextureDecoder } from '../models/buildItemVoxelGrid';
+import { FLUID_SURFACE_BLOCK_IDS } from '../models/handAuthoredTemplates';
 import { decodeBlockstateKey } from './blockstateKey';
 import { resolveFallbackTextureKey } from './resolveFallbackTexture';
 import { filterPaletteForSource } from '../palette/glassSource';
@@ -100,6 +101,14 @@ export async function buildStructureBlockStamp(
     // (bed), an unresolvable blockstate/model, zero elements, or no decodable texture. A
     // structure block is never dropped outright, same guarantee buildStructurePalette.ts used to
     // provide.
+  }
+
+  // Water/lava have no model or texture the fallback chain can resolve, so they used to come out as
+  // the magenta missing-texture cube. A whole cell of the same block Item mode uses for their
+  // surface (not a thin slab — see fluidSurfaceTemplate) keeps the pool's real footprint.
+  if (bareName === 'water' || bareName === 'lava') {
+    const pinned = FLUID_SURFACE_BLOCK_IDS[bareName];
+    if (filterPaletteForSource(palette, bareName).some((entry) => entry.id === pinned)) return solidStamp(pinned, resolution);
   }
 
   const fallbackKey = await resolveFallbackTextureKey(blockId, blockStateFiles, modelFiles);

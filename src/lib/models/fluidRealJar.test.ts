@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildItemVoxelGrid } from './buildItemVoxelGrid';
 import { resolveHandAuthoredTemplate } from './handAuthoredTemplates';
+import { buildStructureBlockStamp } from '../structure/buildStructureBlockStamp';
 import { forEachVoxel } from '../voxel/voxelGrid';
 import { buildPalette } from '../palette/buildPalette';
 import { filterPaletteForSource } from '../palette/glassSource';
@@ -42,6 +43,22 @@ describe.skipIf(!hasRealJar())(`water / lava (real jar: ${REAL_JAR_PATH})`, () =
     });
     expect(count).toBe(256);
     expect([...ys]).toEqual([15]);
+    expect([...ids]).toEqual([blockId]);
+  });
+
+  it.each([
+    ['minecraft:lava[level=0]', 'minecraft:resin_block'],
+    ['minecraft:water[level=0]', 'minecraft:blue_stained_glass'],
+  ] as const)('structure mode stamps %s as a solid cell of %s, not the magenta missing-texture cube', async (key, blockId) => {
+    const { archive, palette, decodeTexture } = await (async () => {
+      const a = await loadRealArchive();
+      const p = buildPalette(await extractTextures(a));
+      const d = async (k: string) => (await loadAndDecodeTexture(k, a.blockTextureFiles)) ?? loadAndDecodeEntityTexture(k, a.entityTextureFiles);
+      return { archive: a, palette: p, decodeTexture: d };
+    })();
+    const stamp = await buildStructureBlockStamp(key, archive.blockStateFiles, archive.modelFiles, decodeTexture, palette, 8);
+    const ids = new Set<string>();
+    forEachVoxel(stamp, (_x, _y, _z, id) => ids.add(id));
     expect([...ids]).toEqual([blockId]);
   });
 
