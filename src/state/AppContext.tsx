@@ -11,6 +11,9 @@ export type FileLoaderMap = Map<string, () => Promise<Uint8Array>>;
 export interface StructureSource {
   name: string;
   load: () => Promise<Uint8Array>;
+  /** Set for a structure the jar has no file for (lib/structure/generatedStructures.ts) — built in
+   *  place of `load` + parse. */
+  generated?: boolean;
 }
 
 export interface AppState {

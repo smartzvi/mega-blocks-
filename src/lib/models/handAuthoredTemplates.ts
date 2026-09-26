@@ -806,6 +806,14 @@ export const HAND_AUTHORED_TEMPLATES: Record<string, HandAuthoredTemplateEntry> 
   // blockstate/model JSON: its moving arm uses the same unparsed per-element `rotation` feature
   // ascending rails do.
   lever: (properties) => leverTemplateFor(properties),
+  // A real end portal is a thin dark surface 12/16 up the cell (below the 13/16-tall frames around
+  // it), animated with a starfield this engine can't show — one flat black slab there instead.
+  end_portal: {
+    model: { textures: { main: 'black_concrete' }, elements: [stretchedBox([0, 11, 0], [16, 12, 16], [0, 0, 16, 16], 'main')] },
+    heightUnits: 16,
+    depthUnits: 16,
+    elementPaletteRestrictions: { 0: ['minecraft:black_concrete'] },
+  },
   water: (properties) => fluidSurfaceTemplate('water', 'blue_concrete', properties),
   lava: (properties) => fluidSurfaceTemplate('lava', 'orange_concrete', properties),
 };

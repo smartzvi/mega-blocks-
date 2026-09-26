@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppState } from '../state/AppContext';
 import { parseStructureFile } from '../lib/structure/parseStructureFile';
+import { GENERATED_STRUCTURE_NAMES, generateStructure } from '../lib/structure/generatedStructures';
 import { cullInteriorVoxels } from '../lib/structure/cullInteriorVoxels';
 import { buildStructureVoxelGrid } from '../lib/structure/buildStructureVoxelGrid';
 import { applyKnownStructureFixes } from '../lib/structure/knownStructureFixes';
@@ -31,7 +32,7 @@ export function StructurePicker() {
   // naturally without needing a separate category/tree UI.
   const allNames = useMemo(() => {
     if (!state.structureFiles) return [];
-    return [...state.structureFiles.keys()].sort();
+    return [...state.structureFiles.keys(), ...GENERATED_STRUCTURE_NAMES].sort();
   }, [state.structureFiles]);
 
   const filtered = useMemo(() => {
@@ -83,8 +84,8 @@ export function StructurePicker() {
 
     (async () => {
       try {
-        const bytes = await source.load();
-        const { grid: rawGrid, blockIds } = await parseStructureFile(bytes);
+        const generated = source.generated ? generateStructure(source.name) : null;
+        const { grid: rawGrid, blockIds } = generated ?? (await parseStructureFile(await source.load()));
         applyKnownStructureFixes(source.name, rawGrid, blockIds);
         const culled = cullInteriorVoxels(rawGrid);
 
@@ -136,8 +137,11 @@ export function StructurePicker() {
   if (state.status !== 'ready') return null;
 
   function selectBuiltIn(name: string) {
-    const load = state.structureFiles!.get(name)!;
-    dispatch({ type: 'STRUCTURE_SOURCE_SELECTED', source: { name, load } });
+    if (GENERATED_STRUCTURE_NAMES.includes(name)) {
+      dispatch({ type: 'STRUCTURE_SOURCE_SELECTED', source: { name, load: async () => new Uint8Array(), generated: true } });
+    } else {
+      dispatch({ type: 'STRUCTURE_SOURCE_SELECTED', source: { name, load: state.structureFiles!.get(name)! } });
+    }
     setQuery('');
     setIsOpen(false);
   }
