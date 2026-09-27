@@ -3,6 +3,8 @@ import { useAppDispatch, useAppState } from '../state/AppContext';
 import { buildMobVoxelGrid } from '../lib/models/buildMobVoxelGrid';
 import { HAND_AUTHORED_MOB_TEMPLATES } from '../lib/models/handAuthoredMobTemplates';
 import { loadAndDecodeEntityTexture } from '../lib/zip/decodeTexture';
+import { ChipGrid } from './ui/Panel';
+import { BuildStatus, ErrorNote, HelpText } from './ui/Search';
 
 // Fixed, short list (5 mobs) sourced entirely from the hand-authored template registry, not from
 // any uploaded-jar map — unlike ItemPicker/StructurePicker, mob support doesn't vary per jar, so a
@@ -53,44 +55,16 @@ export function MobPicker() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3">
-      <div className="flex flex-wrap justify-center gap-2">
-        {MOB_NAMES.map((name) => {
-          const active = name === state.selectedMobName;
-          return (
-            <button
-              key={name}
-              type="button"
-              onClick={() => selectMob(name)}
-              className={`rounded-full px-4 py-2 text-sm font-medium capitalize transition-colors ${
-                active
-                  ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/40'
-                  : 'border border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              {name}
-            </button>
-          );
-        })}
-      </div>
-      <p className="text-center text-xs text-slate-600">
-        Mobs mode (beta) — hand-authored geometry (real mob shapes aren't shipped as jar data,
-        unlike blocks), voxelized through the same color-matching engine as Item mode. Default
-        texture variant only for now, except the boat (pick its wood) and the minecart on a rail
-        (pick the track piece, including slopes).
-      </p>
+    <div className="flex flex-col gap-3">
+      <ChipGrid items={MOB_NAMES} selected={state.selectedMobName} onSelect={selectMob} />
+      <HelpText>
+        Hand-authored geometry (real mob shapes aren't shipped as jar data, unlike blocks), voxelized through the same
+        color-matching engine as Item mode. Default texture variant only for now, except the boat (pick its wood) and
+        the minecart on a rail (pick the track piece, including slopes).
+      </HelpText>
 
-      {state.selectedMobName && (
-        <div className="flex items-center justify-center gap-2 text-sm">
-          <span className="text-slate-500">{isBuilding ? 'Building' : 'Built'}</span>
-          <span className="rounded-full bg-emerald-500/10 px-3 py-1 font-medium capitalize text-emerald-300 ring-1 ring-emerald-500/30">
-            {state.selectedMobName}
-          </span>
-        </div>
-      )}
-      {error && (
-        <p className="rounded-lg bg-red-950/50 px-3 py-2 text-center text-xs text-red-300 ring-1 ring-red-900">{error}</p>
-      )}
+      {state.selectedMobName && <BuildStatus building={isBuilding} name={state.selectedMobName} />}
+      {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useFinalVoxelGrid } from '../state/useFinalVoxelGrid';
+import { useFinalPalette } from '../state/useFinalPalette';
 import { computeMaterialSummary, computeMaterialTally, formatMaterialListText } from '../lib/materials/tally';
+import { BlockIcon } from './ui/BlockIcon';
+import { Panel, QuietButton, SectionHeader } from './ui/Panel';
 
 function CopyIcon() {
   return (
@@ -43,12 +46,23 @@ function legacyCopy(text: string): boolean {
   return ok;
 }
 
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-r border-line px-4 py-3 last:border-r-0">
+      <dt className="font-mono text-[10px] uppercase tracking-[0.08em] text-faint">{label}</dt>
+      <dd className="mt-1 font-mono text-lg tabular-nums text-fg">{value}</dd>
+    </div>
+  );
+}
+
 export function MaterialList() {
   const voxelGrid = useFinalVoxelGrid();
+  const palette = useFinalPalette();
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const entries = useMemo(() => (voxelGrid ? computeMaterialTally(voxelGrid) : []), [voxelGrid]);
   const summary = useMemo(() => computeMaterialSummary(entries), [entries]);
+  const texturesById = useMemo(() => new Map((palette ?? []).map((p) => [p.id, p.textures])), [palette]);
 
   if (!voxelGrid || entries.length === 0) return null;
 
@@ -77,54 +91,37 @@ export function MaterialList() {
   }
 
   return (
-    <div className="w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-[0_0_50px_-12px_rgba(16,185,129,0.1)]">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-2.5">
-        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Material List</span>
-        <div className="flex gap-2">
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-emerald-500/50 hover:text-emerald-300"
-          >
-            <CopyIcon />
-            {copyState === 'copied' ? 'Copied!' : copyState === 'failed' ? 'Copy failed' : 'Copy'}
-          </button>
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-xs font-medium text-slate-300 transition-colors hover:border-emerald-500/50 hover:text-emerald-300"
-          >
-            <DownloadIcon />
-            Export .txt
-          </button>
-        </div>
-      </div>
+    <Panel>
+      <SectionHeader title="Materials">
+        <QuietButton onClick={handleCopy}>
+          <CopyIcon />
+          {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : 'Copy'}
+        </QuietButton>
+        <QuietButton onClick={handleExport}>
+          <DownloadIcon />
+          .txt
+        </QuietButton>
+      </SectionHeader>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs text-slate-400">
-        <span>
-          <span className="font-semibold text-slate-200">{summary.totalDistinctBlocks}</span> block types
-        </span>
-        <span>
-          <span className="font-semibold text-slate-200">{summary.totalBlocks.toLocaleString()}</span> blocks total
-        </span>
-        <span>
-          <span className="font-semibold text-emerald-300">{summary.estimatedShulkersMixed}</span> shulkers needed
-          (mixed)
-        </span>
-      </div>
+      <dl className="grid grid-cols-3 border-b border-line">
+        <Stat label="Block types" value={summary.totalDistinctBlocks.toLocaleString()} />
+        <Stat label="Blocks total" value={summary.totalBlocks.toLocaleString()} />
+        <Stat label="Shulkers (mixed)" value={summary.estimatedShulkersMixed.toLocaleString()} />
+      </dl>
 
-      <ul className="max-h-72 overflow-y-auto px-2 pb-2">
+      <ul className="max-h-80 overflow-y-auto py-1">
         {entries.map((e) => (
-          <li key={e.blockId} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-800/60">
-            <span className="truncate text-sm capitalize text-slate-300">{shortName(e.blockId)}</span>
-            <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
-              <span className="font-medium text-slate-200">{e.count.toLocaleString()}</span>
-              <span className="rounded-full bg-slate-800 px-2 py-0.5">
-                {e.shulkers > 0 && `${e.shulkers} SB `}
-                {e.stacks} stacks + {e.items}
-              </span>
+          <li key={e.blockId} className="flex items-center gap-3 px-4 py-1.5 hover:bg-raised">
+            <BlockIcon textures={texturesById.get(e.blockId)} />
+            <span className="min-w-0 flex-1 truncate text-sm capitalize text-fg">{shortName(e.blockId)}</span>
+            <span className="shrink-0 text-right font-mono text-[13px] tabular-nums text-fg">{e.count.toLocaleString()}</span>
+            <span className="hidden w-40 shrink-0 text-right font-mono text-xs tabular-nums text-faint sm:inline" title="shulker boxes + stacks of 64 + items">
+              {e.shulkers > 0 && `${e.shulkers} SB + `}
+              {e.stacks}×64 + {e.items}
             </span>
           </li>
         ))}
       </ul>
-    </div>
+    </Panel>
   );
 }

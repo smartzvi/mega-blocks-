@@ -1,6 +1,7 @@
 import { useAppDispatch, useAppState } from '../state/AppContext';
 import type { RailShape } from '../types/minecraft';
 import { isRailFamily } from '../lib/models/railTemplates';
+import { SegmentedControl } from './ui/SegmentedControl';
 
 // One representative shape per visually-distinct case, not all 10 real ones: east_west looks
 // identical to north_south here (both a full flat plane — see railTemplates.ts's own doc on why
@@ -35,35 +36,12 @@ export function RailShapeToggle() {
   const hint = OPTIONS.find((o) => o.value === state.railShape)?.hint;
 
   return (
-    <div className="flex w-full flex-col items-center gap-2">
-      <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Rail shape</span>
-      <div
-        role="radiogroup"
-        aria-label="Rail shape"
-        className="inline-flex flex-wrap justify-center gap-1 rounded-full border border-slate-800 bg-slate-900/60 p-1 shadow-inner shadow-black/20"
-      >
-        {OPTIONS.map((opt) => {
-          const active = state.railShape === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              title={opt.hint}
-              onClick={() => !active && dispatch({ type: 'RAIL_SHAPE_CHANGED', railShape: opt.value })}
-              className={`relative rounded-full px-4 py-1.5 text-sm font-semibold transition-all duration-200 ${
-                active
-                  ? 'bg-emerald-500 text-slate-950 shadow-[0_0_16px_rgba(16,185,129,0.55)]'
-                  : 'text-slate-400 hover:text-slate-100'
-              }`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-      {hint && <p className="max-w-md text-center text-xs text-slate-600">{hint}</p>}
-    </div>
+    <SegmentedControl
+      label="Rail shape"
+      options={OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.hint }))}
+      value={state.railShape}
+      onChange={(railShape) => dispatch({ type: 'RAIL_SHAPE_CHANGED', railShape })}
+      hint={hint}
+    />
   );
 }

@@ -5,6 +5,7 @@ import { itemConnectionProperties } from '../lib/models/itemConnections';
 import { railShapeProperties } from '../lib/models/railTemplates';
 import { leverPoweredProperties } from '../lib/models/leverTemplate';
 import { loadAndDecodeEntityTexture, loadAndDecodeTexture } from '../lib/zip/decodeTexture';
+import { BuildStatus, ErrorNote, HelpText, ResultItem, ResultList, SearchField } from './ui/Search';
 
 export function ItemPicker() {
   const state = useAppState();
@@ -116,71 +117,36 @@ export function ItemPicker() {
   }
 
   return (
-    <div ref={containerRef} className="relative mx-auto w-full max-w-md">
-      <div className="relative">
-        <svg
-          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fillRule="evenodd"
-            d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-            clipRule="evenodd"
-          />
-        </svg>
-        <input
-          type="text"
-          placeholder="Search a block to voxelize (e.g. oak_fence)…"
+    <div className="flex flex-col gap-3">
+      <div ref={containerRef} className="relative w-full">
+        <SearchField
           value={query}
+          placeholder="Search a block to voxelize (e.g. oak_fence)…"
           onFocus={() => setIsOpen(true)}
-          onChange={(e) => {
-            setQuery(e.target.value);
+          onChange={(value) => {
+            setQuery(value);
             setIsOpen(true);
           }}
-          className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 shadow-inner shadow-black/20 outline-none transition-colors focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
         />
-      </div>
-      <p className="mt-1.5 text-center text-xs text-slate-600">
-        Item mode (beta) — voxelized from the block's real 3D model, not its flat texture. Most simple JSON-model
-        blocks work. Pick a fence, pane, bars, wall or redstone wire and a control appears to show it connected or
-        isolated; pick a rail and a control appears to pick its shape, including sloped ascending rails; pick a lever
-        and a control appears to toggle it powered on or off.
-      </p>
-
-      {isOpen && filtered.length > 0 && (
-        <ul className="absolute z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/95 p-1.5 shadow-2xl shadow-black/50 backdrop-blur-sm">
-          {filtered.map((name) => (
-            <li key={name}>
-              <button
-                type="button"
-                onClick={() => selectItem(name)}
-                className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  name === state.selectedItemName
-                    ? 'bg-emerald-500/15 text-emerald-300'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`}
-              >
+        {isOpen && filtered.length > 0 && (
+          <ResultList>
+            {filtered.map((name) => (
+              <ResultItem key={name} selected={name === state.selectedItemName} onClick={() => selectItem(name)}>
                 {name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+              </ResultItem>
+            ))}
+          </ResultList>
+        )}
+      </div>
+      <HelpText>
+        Voxelized from the block's real 3D model, not its flat texture. Most simple JSON-model blocks work. Pick a
+        fence, pane, bars, wall or redstone wire and a control appears to show it connected or isolated; pick a rail
+        and a control appears to pick its shape, including sloped ascending rails; pick a lever and a control appears
+        to toggle it powered on or off.
+      </HelpText>
 
-      {state.selectedItemName && (
-        <div className="mt-3 flex items-center justify-center gap-2 text-sm">
-          <span className="text-slate-500">{isBuilding ? 'Building' : 'Built'}</span>
-          <span className="rounded-full bg-emerald-500/10 px-3 py-1 font-medium text-emerald-300 ring-1 ring-emerald-500/30">
-            {state.selectedItemName}
-          </span>
-        </div>
-      )}
-      {error && (
-        <p className="mt-2 rounded-lg bg-red-950/50 px-3 py-2 text-center text-xs text-red-300 ring-1 ring-red-900">
-          {error}
-        </p>
-      )}
+      {state.selectedItemName && <BuildStatus building={isBuilding} name={state.selectedItemName} />}
+      {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
 }

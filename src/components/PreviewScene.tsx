@@ -11,6 +11,7 @@ import { SpectatorVerticalButtons } from './SpectatorVerticalButtons';
 import { useFullscreen } from './useFullscreen';
 import { WalkRig, type WalkInput } from './WalkRig';
 import { WalkJumpButton } from './WalkJumpButton';
+import { SectionHeader } from './ui/Panel';
 
 type ViewMode = 'orbit' | 'spectator' | 'walk';
 
@@ -123,17 +124,19 @@ export function PreviewScene() {
       ref={viewportRef}
       className={
         isFullscreen
-          ? 'flex h-full w-full flex-col overflow-hidden bg-slate-950'
-          : 'w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-[0_0_50px_-12px_rgba(16,185,129,0.15)]'
+          ? 'flex h-full w-full flex-col overflow-hidden bg-canvas'
+          : 'w-full overflow-hidden rounded-panel border border-line bg-panel'
       }
     >
-      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-2.5">
-        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">3D Preview</span>
-        {viewMode === 'orbit' && <span className="hidden text-xs text-slate-600 sm:inline">drag to rotate · scroll to zoom</span>}
-      </div>
-      <div className={`relative w-full bg-gradient-to-b from-slate-900 to-slate-950 ${isFullscreen ? 'min-h-0 flex-1' : 'h-[480px]'}`}>
+      <SectionHeader title="Preview">
+        {viewMode === 'orbit' && <span className="hidden text-xs text-faint sm:inline">Drag to rotate · scroll to zoom</span>}
+        <span className="font-mono text-xs text-muted">
+          {voxelGrid.sizeX}×{voxelGrid.sizeY}×{voxelGrid.sizeZ}
+        </span>
+      </SectionHeader>
+      <div className={`viewport-grid relative w-full ${isFullscreen ? 'min-h-0 flex-1' : 'h-[480px]'}`}>
         <Canvas>
-          <PerspectiveCamera key={resetCount} makeDefault position={cameraPosition} fov={45} onUpdate={(c) => c.lookAt(0, 0, 0)} />
+          <PerspectiveCamera key={`camera-${resetCount}`} makeDefault position={cameraPosition} fov={45} onUpdate={(c) => c.lookAt(0, 0, 0)} />
           <ambientLight intensity={0.6} />
           <directionalLight position={[10, 20, 10]} intensity={1.2} />
           <directionalLight position={[-10, -10, -10]} intensity={0.3} />
@@ -150,7 +153,7 @@ export function PreviewScene() {
           ) : isSpectating ? (
             <SpectatorRig moveSpeed={moveSpeed} joystickRef={moveVector} />
           ) : (
-            <OrbitControls key={resetCount} enableDamping target={[0, 0, 0]} />
+            <OrbitControls key={`orbit-${resetCount}`} enableDamping target={[0, 0, 0]} />
           )}
         </Canvas>
         {/* Spectating shows only the movement controls themselves — no instructional text
@@ -163,7 +166,7 @@ export function PreviewScene() {
               <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-white/70" />
             </div>
             {isFlying && (
-              <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-emerald-500/40 bg-slate-900/80 px-3 py-1 text-xs font-medium text-emerald-300">
+              <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-control border border-accent/40 bg-panel/90 px-3 py-1 font-mono text-xs text-accent">
                 Flying · no collision · double-tap {isTouchDevice() ? 'jump' : 'Space'} to land
               </div>
             )}
@@ -184,11 +187,11 @@ export function PreviewScene() {
               </div>
             ) : (
               !pointerLocked && (
-                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50">
-                  <div className="rounded-xl border border-slate-700 bg-slate-900/90 px-6 py-4 text-center">
-                    <p className="text-sm font-semibold text-slate-100">Click to play</p>
-                    <p className="mt-1 text-xs text-slate-400">WASD to walk · Space to jump · mouse to look · Esc to release</p>
-                    <p className="mt-1 text-xs text-slate-500">Double-tap Space to fly through blocks · Shift to go down</p>
+                <div className="absolute inset-0 flex items-center justify-center bg-canvas/50">
+                  <div className="rounded-panel border border-line-strong bg-panel/95 px-6 py-4 text-center">
+                    <p className="text-sm font-semibold text-fg">Click to play</p>
+                    <p className="mt-1 text-xs text-muted">WASD to walk · Space to jump · mouse to look · Esc to release</p>
+                    <p className="mt-1 text-xs text-faint">Double-tap Space to fly through blocks · Shift to go down</p>
                   </div>
                 </div>
               )
@@ -216,10 +219,10 @@ export function PreviewScene() {
           {viewMode === 'orbit' && (
             <>
               <ViewButton label="Enter walk mode" title="Walk mode — explore in first person (opens fullscreen)" onClick={enterWalkMode}>
-                🚶
+                <Icon d="M13 4.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM9.5 8l-3 1.5V13M9.5 8l2.5 1 1.5 3 2 .5M9.5 8 8.5 13l-2 5M8.5 13l3 1.5 1 3.5" />
               </ViewButton>
               <ViewButton label="Enter spectator mode" title="Spectator mode — fly through and inspect the build" onClick={() => setViewMode('spectator')}>
-                🎮
+                <Icon d="M10 2.5v15M2.5 10h15M10 2.5 8 4.5M10 2.5l2 2M10 17.5l-2-2M10 17.5l2-2M2.5 10l2-2M2.5 10l2 2M17.5 10l-2-2M17.5 10l-2 2" />
               </ViewButton>
             </>
           )}
@@ -228,7 +231,11 @@ export function PreviewScene() {
             title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
             onClick={toggleFullscreen}
           >
-            {isFullscreen ? '🗗' : '⛶'}
+            {isFullscreen ? (
+              <Icon d="M7.5 3v4.5H3M12.5 3v4.5H17M7.5 17v-4.5H3M12.5 17v-4.5H17" />
+            ) : (
+              <Icon d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5" />
+            )}
           </ViewButton>
           {(isSpectating || isWalking) && (
             <ViewButton
@@ -236,7 +243,7 @@ export function PreviewScene() {
               title={isWalking ? 'Exit walk mode' : 'Exit spectator mode'}
               onClick={isWalking ? exitWalkMode : exitSpectatorMode}
             >
-              ✕
+              <Icon d="M5 5l10 10M15 5 5 15" />
             </ViewButton>
           )}
         </div>
@@ -252,9 +259,18 @@ function ViewButton({ label, title, onClick, children }: { label: string; title:
       onClick={onClick}
       title={title}
       aria-label={label}
-      className="flex h-9 min-w-9 items-center justify-center rounded-full border border-slate-600 bg-slate-900/75 px-2.5 text-base leading-none text-slate-200 shadow-lg shadow-black/40 backdrop-blur-sm transition-colors hover:bg-slate-700 hover:text-white"
+      className="flex h-9 w-9 items-center justify-center rounded-control border border-line-strong bg-panel/90 text-muted shadow-lg shadow-black/40 transition-colors hover:bg-raised hover:text-fg"
     >
       {children}
     </button>
+  );
+}
+
+/** A 20×20 line icon for the viewport's buttons. */
+function Icon({ d }: { d: string }) {
+  return (
+    <svg className="h-[18px] w-[18px]" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
   );
 }

@@ -69,10 +69,10 @@ export function SpectatorJoystick({ onChange }: { onChange: (vector: HorizontalV
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className="relative h-24 w-24 touch-none select-none rounded-full border border-emerald-500/30 bg-slate-950/70 backdrop-blur-sm"
+      className="relative h-24 w-24 touch-none select-none rounded-full border border-line-strong bg-panel/80"
     >
       <div
-        className="pointer-events-none absolute left-1/2 top-1/2 h-10 w-10 rounded-full bg-emerald-500/70 shadow-[0_0_12px_rgba(16,185,129,0.6)] transition-transform duration-75"
+        className="pointer-events-none absolute left-1/2 top-1/2 h-10 w-10 rounded-full border border-accent/60 bg-accent/40 transition-transform duration-75"
         style={{ transform: `translate(-50%, -50%) translate(${knob.x}px, ${knob.y}px)` }}
       />
     </div>

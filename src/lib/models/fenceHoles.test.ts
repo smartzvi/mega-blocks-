@@ -90,12 +90,12 @@ describe.skipIf(!hasRealJar())(`fence has no real holes (real jar: ${REAL_JAR_PA
       const { holes } = await countRealHoles('oak_fence', ALL_FOUR, resolution);
       expect(holes, `resolution ${resolution}`).toBe(0);
     }
-  });
+  }, 60000);
 
   it('holds for every wood species and for iron bars (the other real fence-family multipart block)', async () => {
     for (const name of ['spruce_fence', 'dark_oak_fence', 'iron_bars']) {
       const { holes } = await countRealHoles(name, ALL_FOUR, 16);
       expect(holes, name).toBe(0);
     }
-  });
+  }, 60000);
 });

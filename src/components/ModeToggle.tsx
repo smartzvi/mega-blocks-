@@ -1,13 +1,28 @@
 import { useAppDispatch, useAppState, type AppMode } from '../state/AppContext';
+import { Tag } from './ui/Panel';
 
-const OPTIONS: { value: AppMode; label: string }[] = [
-  { value: 'block', label: 'Blocks' },
-  { value: 'item', label: 'Items (beta)' },
-  { value: 'structure', label: 'Structures (beta)' },
-  { value: 'mobs', label: 'Mobs (beta)' },
-  { value: 'trees', label: 'Trees (beta)' },
+const MODE_OPTIONS: { value: AppMode; label: string; beta: boolean }[] = [
+  { value: 'block', label: 'Blocks', beta: false },
+  { value: 'item', label: 'Items', beta: true },
+  { value: 'structure', label: 'Structures', beta: true },
+  { value: 'mobs', label: 'Mobs', beta: true },
+  { value: 'trees', label: 'Trees', beta: true },
 ];
 
+/** One BETA line at the top of the setup panel, in place of a "(beta)" on every tab. */
+export function BetaNotice() {
+  const state = useAppState();
+  const mode = MODE_OPTIONS.find((m) => m.value === state.mode);
+  if (!mode?.beta) return null;
+  return (
+    <div className="-mb-1 flex items-center gap-2">
+      <Tag>Beta</Tag>
+      <span className="text-xs text-faint">{mode.label} mode is still being refined.</span>
+    </div>
+  );
+}
+
+/** Underline tabs across the top of the setup panel. */
 export function ModeToggle() {
   const state = useAppState();
   const dispatch = useAppDispatch();
@@ -15,32 +30,23 @@ export function ModeToggle() {
   if (state.status !== 'ready') return null;
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div
-        role="radiogroup"
-        aria-label="Generator mode"
-        className="inline-flex gap-1 rounded-full border border-slate-800 bg-slate-900/60 p-1 shadow-inner shadow-black/20"
-      >
-        {OPTIONS.map((opt) => {
-          const active = state.mode === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => !active && dispatch({ type: 'MODE_CHANGED', mode: opt.value })}
-              className={`relative rounded-full px-5 py-1.5 text-sm font-semibold transition-all duration-200 ${
-                active
-                  ? 'bg-emerald-500 text-slate-950 shadow-[0_0_16px_rgba(16,185,129,0.55)]'
-                  : 'text-slate-400 hover:text-slate-100'
-              }`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
+    <div role="tablist" aria-label="Generator mode" className="flex overflow-x-auto overflow-y-hidden border-b border-line px-1.5 [scrollbar-width:none] sm:gap-1 sm:px-2">
+      {MODE_OPTIONS.map((opt) => {
+        const active = state.mode === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => !active && dispatch({ type: 'MODE_CHANGED', mode: opt.value })}
+            className={`relative shrink-0 px-2 py-3 text-[13px] font-medium transition-colors sm:px-3 sm:text-sm ${active ? 'text-fg' : 'text-muted hover:text-fg'}`}
+          >
+            {opt.label}
+            <span className={`absolute inset-x-1.5 bottom-0 h-0.5 sm:inset-x-2 ${active ? 'bg-accent' : 'bg-transparent'}`} />
+          </button>
+        );
+      })}
     </div>
   );
 }

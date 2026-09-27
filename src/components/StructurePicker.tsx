@@ -10,6 +10,7 @@ import { buildStructureGrid, warmUpStructureWorker } from '../lib/structure/stru
 import type { BuildProgress } from '../lib/structure/buildProgress';
 import { isAbortError } from '../lib/structure/isAbortError';
 import { BuildProgressBar } from './BuildProgressBar';
+import { BuildStatus, ErrorNote, HelpText, ResultItem, ResultList, ResultNote, SearchField } from './ui/Search';
 
 /** Strips a common structure-file extension (and any directory the browser's file picker might
  *  report) so a custom upload's display name matches the style of a built-in structure's name. */
@@ -160,69 +161,39 @@ export function StructurePicker() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div ref={containerRef} className="relative mx-auto w-full max-w-md">
-        <div className="relative">
-          <svg
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fillRule="evenodd"
-              d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search a built-in structure (e.g. village/plains/houses)…"
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div ref={containerRef} className="relative w-full min-w-0 flex-1">
+          <SearchField
             value={query}
+            placeholder="Search a built-in structure (e.g. village/plains/houses)…"
             onFocus={() => setIsOpen(true)}
-            onChange={(e) => {
-              setQuery(e.target.value);
+            onChange={(value) => {
+              setQuery(value);
               setIsOpen(true);
             }}
-            className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-2.5 pl-10 pr-4 text-sm text-slate-100 placeholder-slate-500 shadow-inner shadow-black/20 outline-none transition-colors focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
           />
-        </div>
-        <p className="mt-1.5 text-center text-xs text-slate-600">
-          Structure mode (beta) — voxelizes every real block through the same color-matching
-          engine as Item mode, at {state.resolution}×{state.resolution}×{state.resolution} voxels
-          per source block, respecting each block's real orientation (stairs, doors, logs, ...).
-          Beds render as a single matched color instead of their real shape.
-        </p>
-
-        {isOpen && filtered.length > 0 && (
-          <ul className="absolute z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/95 p-1.5 shadow-2xl shadow-black/50 backdrop-blur-sm">
-            {filtered.map((name) => (
-              <li key={name}>
-                <button
-                  type="button"
-                  onClick={() => selectBuiltIn(name)}
-                  className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                    name === state.selectedStructureSource?.name
-                      ? 'bg-emerald-500/15 text-emerald-300'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
+          {isOpen && filtered.length > 0 && (
+            <ResultList>
+              {filtered.map((name) => (
+                <ResultItem key={name} selected={name === state.selectedStructureSource?.name} onClick={() => selectBuiltIn(name)}>
                   {name}
-                </button>
-              </li>
-            ))}
-            {totalMatches > filtered.length && (
-              <li className="px-3 py-2 text-center text-xs text-slate-500">
-                Showing {filtered.length} of {totalMatches} — keep typing to narrow it down
-              </li>
-            )}
-          </ul>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <span>or</span>
-        <label className="cursor-pointer rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 font-medium text-slate-300 transition-colors hover:border-emerald-500/40 hover:text-white">
-          Upload a .nbt / .litematic file
+                </ResultItem>
+              ))}
+              {totalMatches > filtered.length && (
+                <ResultNote>
+                  Showing {filtered.length} of {totalMatches} — keep typing to narrow it down
+                </ResultNote>
+              )}
+            </ResultList>
+          )}
+        </div>
+        <label className="flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-control border border-line bg-raised px-3 py-2 text-xs font-medium text-muted transition-colors hover:border-line-strong hover:text-fg">
+          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path d="M9.25 13.25a.75.75 0 001.5 0V4.636l2.955 3.129a.75.75 0 001.09-1.03l-4.25-4.5a.75.75 0 00-1.09 0l-4.25 4.5a.75.75 0 101.09 1.03L9.25 4.636v8.614z" />
+            <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+          </svg>
+          Upload .nbt / .litematic
           <input
             type="file"
             accept=".nbt,.litematic"
@@ -234,19 +205,18 @@ export function StructurePicker() {
           />
         </label>
       </div>
+      <HelpText>
+        Voxelizes every real block through the same color-matching engine as Item mode, at{' '}
+        <span className="font-mono">
+          {state.resolution}×{state.resolution}×{state.resolution}
+        </span>{' '}
+        voxels per source block, respecting each block's real orientation (stairs, doors, logs, ...). Beds render as a
+        single matched color instead of their real shape.
+      </HelpText>
 
-      {state.selectedStructureSource && (
-        <div className="flex items-center justify-center gap-2 text-sm">
-          <span className="text-slate-500">{isBuilding ? 'Building' : 'Built'}</span>
-          <span className="rounded-full bg-emerald-500/10 px-3 py-1 font-medium text-emerald-300 ring-1 ring-emerald-500/30">
-            {state.selectedStructureSource.name}
-          </span>
-        </div>
-      )}
+      {state.selectedStructureSource && <BuildStatus building={isBuilding} name={state.selectedStructureSource.name} />}
       {isBuilding && <BuildProgressBar progress={progress} />}
-      {error && (
-        <p className="rounded-lg bg-red-950/50 px-3 py-2 text-center text-xs text-red-300 ring-1 ring-red-900">{error}</p>
-      )}
+      {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
 }

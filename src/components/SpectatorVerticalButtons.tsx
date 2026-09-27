@@ -30,7 +30,7 @@ export function SpectatorVerticalButtons({ onChange }: { onChange: (y: number) =
   }
 
   const buttonClass =
-    'flex h-11 w-11 touch-none select-none items-center justify-center rounded-full border border-emerald-500/30 bg-slate-950/70 text-lg text-emerald-300 backdrop-blur-sm active:bg-emerald-500/20';
+    'flex h-11 w-11 touch-none select-none items-center justify-center rounded-control border border-line-strong bg-panel/85 text-lg text-fg active:bg-accent-dim active:text-accent';
 
   return (
     <div className="flex flex-col gap-2">

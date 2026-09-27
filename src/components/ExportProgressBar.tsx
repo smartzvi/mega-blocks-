@@ -23,10 +23,10 @@ export function ExportProgressBar({ progress }: { progress: ExportProgress | nul
   const label = progress ? EXPORT_STAGE_LABELS[progress.stage] : EXPORT_STAGE_LABELS.write;
 
   return (
-    <div className="w-full max-w-md">
-      <div className="mb-1 flex items-center justify-between text-xs text-slate-400">
+    <div className="w-full">
+      <div className="mb-1.5 flex items-center justify-between text-xs text-muted">
         <span>{label}…</span>
-        <span className="tabular-nums">{percent}%</span>
+        <span className="font-mono tabular-nums">{percent}%</span>
       </div>
       <div
         role="progressbar"
@@ -35,9 +35,9 @@ export function ExportProgressBar({ progress }: { progress: ExportProgress | nul
         aria-valuemax={100}
         aria-valuenow={percent}
         aria-valuetext={`${label}, ${percent} percent`}
-        className="h-2 w-full overflow-hidden rounded-full bg-slate-800"
+        className="h-1 w-full overflow-hidden rounded-[1px] bg-line"
       >
-        <div className="h-full rounded-full bg-emerald-500 transition-[width] duration-150 ease-out" style={{ width: `${percent}%` }} />
+        <div className="h-full bg-accent transition-[width] duration-150 ease-out" style={{ width: `${percent}%` }} />
       </div>
     </div>
   );

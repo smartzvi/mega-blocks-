@@ -1,9 +1,9 @@
 import { AppProvider, useAppState } from './state/AppContext';
 import { AdRail } from './components/AdRail';
 import { AdSenseLoader } from './components/AdSenseLoader';
-import { UploadPanel } from './components/UploadPanel';
+import { JarStatus, UploadPanel } from './components/UploadPanel';
 import { ResolutionToggle } from './components/ResolutionToggle';
-import { ModeToggle } from './components/ModeToggle';
+import { BetaNotice, ModeToggle } from './components/ModeToggle';
 import { BlockSearch } from './components/BlockSearch';
 import { ShapeSelector } from './components/ShapeSelector';
 import { ConnectionToggle } from './components/ConnectionToggle';
@@ -17,37 +17,51 @@ import { TreePicker } from './components/TreePicker';
 import { PreviewScene } from './components/PreviewScene';
 import { MaterialList } from './components/MaterialList';
 import { ExportButtons } from './components/ExportButtons';
+import { Wordmark } from './components/ui/Logo';
+
+/** The mode tabs, then one card holding the mode's picker and its settings. */
+function SetupPanel() {
+  const state = useAppState();
+
+  return (
+    <section className="w-full rounded-panel border border-line bg-panel">
+      <ModeToggle />
+      <div className="flex flex-col gap-5 p-4 sm:p-5">
+        <BetaNotice />
+        {state.mode === 'block' && <BlockSearch />}
+        {state.mode === 'item' && <ItemPicker />}
+        {state.mode === 'structure' && <StructurePicker />}
+        {state.mode === 'mobs' && <MobPicker />}
+        {state.mode === 'trees' && <TreePicker />}
+
+        <div className="flex flex-col gap-3 border-t border-line pt-4">
+          <ResolutionToggle />
+          {state.mode === 'block' && <ShapeSelector />}
+          {state.mode === 'item' && (
+            <>
+              <ConnectionToggle />
+              <RailShapeToggle />
+              <LeverPoweredToggle />
+            </>
+          )}
+          {state.mode === 'mobs' && (
+            <>
+              <BoatWoodToggle />
+              <RailShapeToggle />
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function Workspace() {
   const state = useAppState();
+  if (state.status !== 'ready') return <UploadPanel />;
   return (
     <>
-      <UploadPanel />
-      <ResolutionToggle />
-      <ModeToggle />
-      {state.mode === 'block' && (
-        <>
-          <BlockSearch />
-          <ShapeSelector />
-        </>
-      )}
-      {state.mode === 'item' && (
-        <>
-          <ItemPicker />
-          <ConnectionToggle />
-          <RailShapeToggle />
-          <LeverPoweredToggle />
-        </>
-      )}
-      {state.mode === 'structure' && <StructurePicker />}
-      {state.mode === 'mobs' && (
-        <>
-          <MobPicker />
-          <BoatWoodToggle />
-          <RailShapeToggle />
-        </>
-      )}
-      {state.mode === 'trees' && <TreePicker />}
+      <SetupPanel />
       <PreviewScene />
       <MaterialList />
       <ExportButtons />
@@ -57,45 +71,29 @@ function Workspace() {
 
 function AppShell() {
   const state = useAppState();
-  // Centered like a hero screen only while there's nothing else to show yet. Once a jar is
-  // loading/loaded, keep everything top-aligned instead — otherwise the picker/preview/material
-  // list all land pushed down by the same vertical-centering that looked good on an empty page,
-  // forcing extra scrolling to reach content that should be immediately visible.
-  const isIdle = state.status === 'idle';
+  const isIdle = state.status !== 'ready';
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-slate-950 text-slate-200">
+    <div className="min-h-screen overflow-x-hidden bg-canvas text-fg">
       <AdSenseLoader />
-      {/* Ambient background glow — purely decorative */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-[-10%] h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-[120px]" />
-        <div className="absolute right-[-10%] top-[30%] h-[28rem] w-[28rem] rounded-full bg-cyan-500/5 blur-[120px]" />
-      </div>
+      <header className="sticky top-0 z-30 border-b border-line bg-canvas/90 backdrop-blur-sm">
+        <div className="mx-auto flex h-12 max-w-[1400px] items-center justify-between gap-4 px-4 sm:px-6">
+          <Wordmark />
+          <JarStatus />
+        </div>
+      </header>
 
-      <div
-        className={`relative mx-auto flex min-h-screen max-w-[1400px] justify-center gap-6 px-4 py-12 sm:px-6 md:py-16 ${
-          isIdle ? 'items-center' : 'items-start'
-        }`}
-      >
+      <div className={`mx-auto flex max-w-[1400px] justify-center gap-6 px-4 sm:px-6 ${isIdle ? 'py-12 md:py-20' : 'py-6 md:py-8'}`}>
         <AdRail side="left" />
 
-        <main className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center gap-8 text-center">
-          <header className="w-full text-center">
-            <h1 className="text-balance bg-gradient-to-b from-white to-slate-400 bg-clip-text text-4xl font-extrabold leading-tight tracking-tight text-transparent sm:text-5xl md:text-6xl">
-              Minecraft Block <span className="text-emerald-400">→</span> 3D Megablock Generator
-            </h1>
-            <p className="mx-auto mt-4 max-w-lg text-base text-slate-400 sm:text-lg">
-              Upload your resource pack, pick a block, and build a giant pixel-art megablock out of real vanilla
-              materials.
-            </p>
-          </header>
-
+        <main className="flex w-full min-w-0 max-w-3xl flex-col gap-4">
           <Workspace />
 
-          <footer className="mt-4 text-center text-xs text-slate-500">
-            <a href="/privacy.html" className="hover:text-slate-300">
-              Privacy Policy
+          <footer className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line pt-4 text-xs text-faint">
+            <a href="/privacy.html" className="transition-colors hover:text-muted">
+              Privacy
             </a>
+            <span>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</span>
           </footer>
         </main>
 

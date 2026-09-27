@@ -7,6 +7,8 @@ import { exportGridToBytes } from '../lib/nbt/exportClient';
 import type { ExportProgress } from '../lib/nbt/exportProgress';
 import { countVoxels } from '../lib/voxel/voxelGrid';
 import { ExportProgressBar } from './ExportProgressBar';
+import { Panel, SectionHeader } from './ui/Panel';
+import { ErrorNote } from './ui/Search';
 
 function downloadBytes(bytes: Uint8Array, filename: string) {
   const blob = new Blob([bytes as BlobPart], { type: 'application/octet-stream' });
@@ -126,36 +128,37 @@ export function ExportButtons() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/60 px-4 py-1.5 text-xs font-medium text-slate-300">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_2px_rgba(16,185,129,0.6)]" />
-        {voxelGrid.sizeX}×{voxelGrid.sizeY}×{voxelGrid.sizeZ} {shapeLabel}
-        <span className="text-slate-600">·</span>
-        <span className="text-emerald-300">{blockCount.toLocaleString()}</span> blocks
+    <Panel>
+      <SectionHeader title="Export">
+        <span className="font-mono text-xs text-faint">
+          {voxelGrid.sizeX}×{voxelGrid.sizeY}×{voxelGrid.sizeZ} {shapeLabel} · {blockCount.toLocaleString()} blocks
+        </span>
+      </SectionHeader>
+      <div className="flex flex-col gap-3 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            onClick={() => runExport('litematic')}
+            disabled={exporting !== null}
+            className="flex flex-1 items-center justify-center gap-2 rounded-control bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink transition-colors hover:bg-accent-hover disabled:cursor-wait disabled:opacity-60"
+          >
+            <DownloadIcon />
+            {exporting === 'litematic' ? 'Preparing…' : 'Download .litematic'}
+          </button>
+          <button
+            onClick={() => runExport('nbt')}
+            disabled={exporting !== null}
+            className="flex flex-1 items-center justify-center gap-2 rounded-control border border-line-strong bg-raised px-4 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-hover disabled:cursor-wait disabled:opacity-60"
+          >
+            <DownloadIcon />
+            {exporting === 'nbt' ? 'Preparing…' : 'Download .nbt'}
+          </button>
+        </div>
+        <p className="truncate font-mono text-[11px] text-faint" title={baseName}>
+          {baseName}
+        </p>
+        {exporting && <ExportProgressBar progress={progress} />}
+        {exportError && <ErrorNote>{exportError}</ErrorNote>}
       </div>
-
-      <div className="flex w-full max-w-md flex-col gap-3 sm:flex-row">
-        <button
-          onClick={() => runExport('litematic')}
-          disabled={exporting !== null}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/40 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-700/50 active:translate-y-0 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
-        >
-          <DownloadIcon />
-          {exporting === 'litematic' ? 'Preparing…' : 'Download .litematic'}
-        </button>
-        <button
-          onClick={() => runExport('nbt')}
-          disabled={exporting !== null}
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/40 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-700/50 active:translate-y-0 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
-        >
-          <DownloadIcon />
-          {exporting === 'nbt' ? 'Preparing…' : 'Download .nbt'}
-        </button>
-      </div>
-      {exporting && <ExportProgressBar progress={progress} />}
-      {exportError && (
-        <p className="max-w-md rounded-lg bg-red-950/50 px-3 py-2 text-center text-xs text-red-300 ring-1 ring-red-900">{exportError}</p>
-      )}
-    </div>
+    </Panel>
   );
 }

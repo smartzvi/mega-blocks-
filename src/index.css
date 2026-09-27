@@ -1,15 +1,73 @@
 @import "tailwindcss";
 
-html {
-  color-scheme: dark;
+/* Design tokens: warm stone surfaces, one grass-green accent. Components use these names
+   (bg-canvas, text-muted, border-line, bg-accent, ...) instead of raw palette colours. */
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", monospace;
+  --font-pixel: "Silkscreen", "Geist Mono", monospace;
+
+  --color-canvas: #0f0e0c;
+  --color-panel: #171512;
+  --color-raised: #1f1c18;
+  --color-hover: #26221d;
+  --color-line: #2b2721;
+  --color-line-strong: #3a352d;
+
+  --color-fg: #ece8e1;
+  --color-muted: #a39c90;
+  --color-faint: #6f685d;
+
+  --color-accent: #7cc24a;
+  --color-accent-hover: #8fd35c;
+  --color-accent-ink: #11200a;
+  --color-accent-dim: rgb(124 194 74 / 0.12);
+
+  --color-danger: #e5735c;
+  --color-danger-dim: rgb(229 115 92 / 0.1);
+
+  --radius-control: 6px;
+  --radius-panel: 8px;
 }
 
-body {
-  margin: 0;
-  background-color: #020617;
+/* In the base layer so utilities (e.g. a hidden scrollbar) can still override these. */
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    scrollbar-color: var(--color-line-strong) transparent;
+    scrollbar-width: thin;
+  }
+
+  ::selection {
+    background: rgb(124 194 74 / 0.3);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }
 
-* {
-  scrollbar-color: #334155 #0f172a;
-  scrollbar-width: thin;
+/* The 3D preview's backdrop: a faint 16px pixel grid, the one place the page shows its grid. */
+.viewport-grid {
+  background-color: #12110f;
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.028) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.028) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.pixelated {
+  image-rendering: pixelated;
 }

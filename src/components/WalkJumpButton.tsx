@@ -23,7 +23,7 @@ export function WalkJumpButton({ onChange, down = false }: { onChange: (held: bo
       onPointerUp={release}
       onPointerLeave={release}
       onPointerCancel={release}
-      className="flex h-16 w-16 select-none items-center justify-center rounded-full border border-slate-600 bg-slate-800/70 text-2xl text-slate-200 active:bg-emerald-600/70"
+      className="flex h-16 w-16 select-none items-center justify-center rounded-full border border-line-strong bg-panel/80 text-2xl text-fg active:bg-accent-dim active:text-accent"
       style={{ touchAction: 'none' }}
     >
       {down ? '⤓' : '⤒'}
