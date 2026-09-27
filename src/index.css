@@ -1,30 +1,30 @@
 @import "tailwindcss";
 
-/* Design tokens: warm stone surfaces, one grass-green accent. Components use these names
+/* Design tokens: neutral black surfaces, one green accent. Components use these names
    (bg-canvas, text-muted, border-line, bg-accent, ...) instead of raw palette colours. */
 @theme {
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", monospace;
   --font-pixel: "Silkscreen", "Geist Mono", monospace;
 
-  --color-canvas: #0f0e0c;
-  --color-panel: #171512;
-  --color-raised: #1f1c18;
-  --color-hover: #26221d;
-  --color-line: #2b2721;
-  --color-line-strong: #3a352d;
+  --color-canvas: #080808;
+  --color-panel: #101010;
+  --color-raised: #181818;
+  --color-hover: #1f1f1f;
+  --color-line: #242424;
+  --color-line-strong: #333333;
 
-  --color-fg: #ece8e1;
-  --color-muted: #a39c90;
-  --color-faint: #6f685d;
+  --color-fg: #ededed;
+  --color-muted: #a0a0a0;
+  --color-faint: #666666;
 
-  --color-accent: #7cc24a;
-  --color-accent-hover: #8fd35c;
-  --color-accent-ink: #11200a;
-  --color-accent-dim: rgb(124 194 74 / 0.12);
+  --color-accent: #6fdc3c;
+  --color-accent-hover: #88e85c;
+  --color-accent-ink: #081a02;
+  --color-accent-dim: rgb(111 220 60 / 0.12);
 
-  --color-danger: #e5735c;
-  --color-danger-dim: rgb(229 115 92 / 0.1);
+  --color-danger: #f0605a;
+  --color-danger-dim: rgb(240 96 90 / 0.1);
 
   --radius-control: 6px;
   --radius-panel: 8px;
@@ -50,7 +50,7 @@
   }
 
   ::selection {
-    background: rgb(124 194 74 / 0.3);
+    background: rgb(111 220 60 / 0.3);
   }
 
   :focus-visible {
@@ -61,7 +61,7 @@
 
 /* The 3D preview's backdrop: a faint 16px pixel grid, the one place the page shows its grid. */
 .viewport-grid {
-  background-color: #12110f;
+  background-color: #0b0b0b;
   background-image:
     linear-gradient(to right, rgb(255 255 255 / 0.028) 1px, transparent 1px),
     linear-gradient(to bottom, rgb(255 255 255 / 0.028) 1px, transparent 1px);
