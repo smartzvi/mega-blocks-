@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { HAND_AUTHORED_MOB_TEMPLATES } from './handAuthoredMobTemplates';
 
-const MOB_NAMES = ['pig', 'chicken', 'zombie', 'skeleton', 'snow golem', 'sheep', 'iron golem', 'panda', 'bee', 'wolf', 'witch'];
+const MOB_NAMES = ['pig', 'chicken', 'zombie', 'skeleton', 'snow golem', 'sheep', 'iron golem', 'panda', 'bee', 'wolf', 'witch', 'minecart', 'minecart on rail', 'boat'];
 
 describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
-  it('has exactly the 11 starter mobs, each with a real entity texture key', () => {
+  it('has exactly the 11 starter mobs plus the minecart, minecart on rail and boat, each with a real entity texture key', () => {
     expect(Object.keys(HAND_AUTHORED_MOB_TEMPLATES).sort()).toEqual([...MOB_NAMES].sort());
     expect(HAND_AUTHORED_MOB_TEMPLATES.pig.model.textures.main).toBe('pig/temperate_pig');
     expect(HAND_AUTHORED_MOB_TEMPLATES.chicken.model.textures.main).toBe('chicken/temperate_chicken');
@@ -22,14 +22,14 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(HAND_AUTHORED_MOB_TEMPLATES.witch.model.textures.main).toBe('witch');
   });
 
-  it('every element stays within model-space X 0-16 for every mob — rasterizeItemModel silently clips out-of-range X, so this must hold exactly (this is the real regression test for iron golem, the first mob wider than one block)', () => {
+  it('every element stays within its model-space X extent (16, or its declared widthUnits) for every mob — rasterizeItemModel silently clips out-of-range X, so this must hold exactly (this is the real regression test for iron golem, the first mob wider than one block)', () => {
     for (const name of MOB_NAMES) {
-      const { elements } = HAND_AUTHORED_MOB_TEMPLATES[name].model;
-      for (const el of elements) {
+      const { model, widthUnits = 16 } = HAND_AUTHORED_MOB_TEMPLATES[name];
+      for (const el of model.elements) {
         expect(el.from[0]).toBeGreaterThanOrEqual(0);
         expect(el.to[0]).toBeGreaterThanOrEqual(0);
-        expect(el.from[0]).toBeLessThanOrEqual(16);
-        expect(el.to[0]).toBeLessThanOrEqual(16);
+        expect(el.from[0]).toBeLessThanOrEqual(widthUnits);
+        expect(el.to[0]).toBeLessThanOrEqual(widthUnits);
       }
     }
   });
@@ -52,7 +52,8 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
         }
       }
       expect(minX).toBe(0);
-      expect(minY).toBe(0);
+      // A cart on a rail rests on the rail's own plane at y=1 (see railTemplates.ts), so nothing sits at y=0.
+      expect(minY).toBe(name === 'minecart on rail' ? 1 : 0);
       expect(minZ).toBe(0);
       expect(maxY).toBe(heightUnits);
       expect(maxZ).toBe(depthUnits);

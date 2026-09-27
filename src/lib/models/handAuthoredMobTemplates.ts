@@ -1,4 +1,7 @@
 import type { FaceName } from '../../types/minecraft';
+import { minecartOnRailTemplate, minecartTemplate } from './cartTemplates';
+import { boatTemplateFor, DEFAULT_BOAT_WOOD } from './boatTemplates';
+import type { BoatWood, RailShape } from '../../types/minecraft';
 import type { BlockModelElement } from '../../types/item';
 import { boxElement, stretchedBox } from './handAuthoredTemplates';
 import type { HandAuthoredTemplate } from './handAuthoredTemplates';
@@ -1185,4 +1188,22 @@ export const HAND_AUTHORED_MOB_TEMPLATES: Record<string, HandAuthoredTemplate> =
   bee: beeModel('bee/bee'),
   wolf: wolfModel('wolf/wolf'),
   witch: witchModel('witch'),
+  minecart: minecartTemplate(),
+  'minecart on rail': minecartOnRailTemplate('north_south'),
+  boat: boatTemplateFor(DEFAULT_BOAT_WOOD),
 };
+
+/** The choices a few mobs carry beyond their name: which wood a boat is made of, and which piece of
+ *  track a minecart sits on. Anything else ignores them. */
+export interface MobVariantOptions {
+  boatWood?: BoatWood;
+  railShape?: RailShape;
+}
+
+/** Looks a mob up in the registry, resolving the variants above — the registry itself only holds each
+ *  mob's default look (what the picker's button list is built from). */
+export function resolveMobTemplate(name: string, options?: MobVariantOptions): HandAuthoredTemplate | undefined {
+  if (name === 'boat') return boatTemplateFor(options?.boatWood ?? DEFAULT_BOAT_WOOD);
+  if (name === 'minecart on rail') return minecartOnRailTemplate(options?.railShape ?? 'north_south');
+  return HAND_AUTHORED_MOB_TEMPLATES[name];
+}

@@ -28,7 +28,10 @@ export function MobPicker() {
     (async () => {
       try {
         const decodeTexture = (key: string) => loadAndDecodeEntityTexture(key, state.entityTextureFiles!);
-        const mobVoxelGrid = await buildMobVoxelGrid(mobName, decodeTexture, state.palette!, state.resolution);
+        const mobVoxelGrid = await buildMobVoxelGrid(mobName, decodeTexture, state.palette!, state.resolution, {
+          boatWood: state.boatWood,
+          railShape: state.railShape,
+        });
         if (!cancelled) dispatch({ type: 'MOB_VOXELIZED', mobVoxelGrid });
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -41,7 +44,7 @@ export function MobPicker() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.selectedMobName, state.resolution, state.entityTextureFiles, state.palette, dispatch]);
+  }, [state.selectedMobName, state.resolution, state.boatWood, state.railShape, state.entityTextureFiles, state.palette, dispatch]);
 
   if (state.status !== 'ready') return null;
 
@@ -73,7 +76,8 @@ export function MobPicker() {
       <p className="text-center text-xs text-slate-600">
         Mobs mode (beta) — hand-authored geometry (real mob shapes aren't shipped as jar data,
         unlike blocks), voxelized through the same color-matching engine as Item mode. Default
-        texture variant only for now.
+        texture variant only for now, except the boat (pick its wood) and the minecart on a rail
+        (pick the track piece, including slopes).
       </p>
 
       {state.selectedMobName && (

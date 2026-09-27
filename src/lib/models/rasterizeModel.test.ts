@@ -3,7 +3,7 @@ import { rasterizeItemModel } from './rasterizeModel';
 import { averageColorHsv, averageColorLab } from '../color/averageColor';
 import type { FaceTexture, MaterialFamily, PaletteEntry, VoxelGrid } from '../../types/minecraft';
 import type { BlockModel } from '../../types/item';
-import { getVoxel } from '../voxel/voxelGrid';
+import { forEachVoxel, getVoxel } from '../voxel/voxelGrid';
 
 function fakePaletteEntry(id: string, r: number, g: number, b: number, family: MaterialFamily = 'stone_deepslate'): PaletteEntry {
   const data = new Uint8ClampedArray(16 * 16 * 4);
@@ -507,5 +507,40 @@ describe('rasterizeItemModel', () => {
     expect(getVoxel(suppressed, 4, 7, 4)).toBeNull();
     // A voxel on the bottom (never suppressed here) is completely unaffected.
     expect(getVoxel(suppressed, 4, 0, 4)).toBe('minecraft:end_color');
+  });
+});
+
+describe('rasterizeItemModel modelWidthUnits', () => {
+  const data = new Uint8ClampedArray(16 * 16 * 4).fill(200);
+  for (let k = 3; k < data.length; k += 4) data[k] = 255;
+  const textures = new Map<string, FaceTexture>([['t', { width: 16, height: 16, data }]]);
+  const palette = [fakePaletteEntry('minecraft:stone', 200, 200, 200)];
+  const face = { uv: [0, 0, 16, 16] as [number, number, number, number], texture: '#a' };
+  const wide = (x1: number) => ({
+    textures: { a: 't' },
+    elements: [{ from: [0, 0, 0] as [number, number, number], to: [x1, 2, 2] as [number, number, number], faces: { top: face, bottom: face, north: face, south: face, east: face, west: face } }],
+  });
+
+  it('defaults to one block wide, exactly as before', () => {
+    const g = rasterizeItemModel(wide(16), textures, palette, 16);
+    expect(g.sizeX).toBe(16);
+    const explicit = rasterizeItemModel(wide(16), textures, palette, 16, 16, 16, undefined, undefined, 16);
+    expect(explicit.sizeX).toBe(16);
+    expect(explicit.voxels.size).toBe(g.voxels.size);
+  });
+
+  it('a wider model gets a proportionally wider grid and keeps the voxels past one block', () => {
+    const g = rasterizeItemModel(wide(44), textures, palette, 16, 16, 16, undefined, undefined, 44);
+    expect(g.sizeX).toBe(44);
+    let maxX = -1;
+    forEachVoxel(g, (x) => (maxX = Math.max(maxX, x)));
+    expect(maxX).toBe(43);
+  });
+
+  it('without the width, the same wide element is clipped to one block (the old behaviour)', () => {
+    const g = rasterizeItemModel(wide(44), textures, palette, 16);
+    let maxX = -1;
+    forEachVoxel(g, (x) => (maxX = Math.max(maxX, x)));
+    expect(maxX).toBe(15);
   });
 });

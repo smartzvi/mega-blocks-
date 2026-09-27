@@ -17,6 +17,8 @@ function displayNameFor(fileName: string): string {
   return fileName.replace(/\.(nbt|litematic)$/i, '');
 }
 
+const RESULT_LIMIT = 200;
+
 export function StructurePicker() {
   const state = useAppState();
   const dispatch = useAppDispatch();
@@ -35,10 +37,14 @@ export function StructurePicker() {
     return [...state.structureFiles.keys(), ...GENERATED_STRUCTURE_NAMES].sort();
   }, [state.structureFiles]);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return allNames.slice(0, 20);
+  // Twenty matches used to be all the list ever showed, so a family with more pieces than that (a
+  // woodland mansion has 73) silently hid most of them — e.g. "woodland" never got as far as
+  // `1x2_d4`. A search now lists up to RESULT_LIMIT matches, and says so when it is still cutting some.
+  const { filtered, totalMatches } = useMemo(() => {
+    if (!query.trim()) return { filtered: allNames.slice(0, 20), totalMatches: allNames.length };
     const q = query.toLowerCase();
-    return allNames.filter((name) => name.toLowerCase().includes(q)).slice(0, 20);
+    const matches = allNames.filter((name) => name.toLowerCase().includes(q));
+    return { filtered: matches.slice(0, RESULT_LIMIT), totalMatches: matches.length };
   }, [allNames, query]);
 
   useEffect(() => {
@@ -204,6 +210,11 @@ export function StructurePicker() {
                 </button>
               </li>
             ))}
+            {totalMatches > filtered.length && (
+              <li className="px-3 py-2 text-center text-xs text-slate-500">
+                Showing {filtered.length} of {totalMatches} — keep typing to narrow it down
+              </li>
+            )}
           </ul>
         )}
       </div>

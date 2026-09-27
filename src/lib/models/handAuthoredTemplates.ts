@@ -679,6 +679,9 @@ export interface HandAuthoredTemplate {
    *  template here is a normal single-block height; only bed doubles its depth. */
   heightUnits: number;
   depthUnits: number;
+  /** X extent in 16-units-per-block terms; 16 (one block) when absent. Only an entity wider than a
+   *  block sets it (the boat, oars out) — see rasterizeItemModel's `modelWidthUnits`. */
+  widthUnits?: number;
   /** Maps `model.elements` indices to an explicit allow-list of palette block ids that element
    *  should match against instead of the shared palette — buildItemVoxelGrid.ts turns each entry
    *  into a restricted per-element palette passed to rasterizeItemModel's `elementPaletteOverrides`

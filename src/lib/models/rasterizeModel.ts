@@ -120,6 +120,8 @@ function resolveFaceColor(
  * genuinely glowing rather than picking whatever wood/wool tone happens to be closest in color.
  * Elements with no entry in the map keep using the shared `palette`, unaffected.
  *
+ * `modelWidthUnits` (the last parameter) is the X extent, like `modelHeightUnits`/`modelDepthUnits` for Y/Z.
+ *
  * `suppressedFaces`, when given (structure mode, buildStructureVoxelGrid.ts — see its own doc),
  * names world-direction faces this stamp should never let win an edge voxel's color, because the
  * real structure has another occurrence of this exact same block continuing in that direction.
@@ -140,9 +142,14 @@ export function rasterizeItemModel(
   modelHeightUnits = MODEL_SPACE_SIZE,
   modelDepthUnits = MODEL_SPACE_SIZE,
   elementPaletteOverrides?: Map<number, PaletteEntry[]>,
-  suppressedFaces?: ReadonlySet<FaceName>
+  suppressedFaces?: ReadonlySet<FaceName>,
+  modelWidthUnits = MODEL_SPACE_SIZE
 ): VoxelGrid {
   const scale = resolution / MODEL_SPACE_SIZE;
+  // X was always exactly one block wide; `modelWidthUnits` is the X counterpart of the height/depth
+  // parameters, for the rare model that is genuinely wider than a block (a boat with its oars out).
+  // The default keeps every existing caller's grid bit-for-bit what it was.
+  const resolutionX = Math.round(resolution * (modelWidthUnits / MODEL_SPACE_SIZE));
   const resolutionY = Math.round(resolution * (modelHeightUnits / MODEL_SPACE_SIZE));
   const resolutionZ = Math.round(resolution * (modelDepthUnits / MODEL_SPACE_SIZE));
 
@@ -158,7 +165,7 @@ export function rasterizeItemModel(
     const y1 = Math.max(ry1, ry0 + 1);
     const z1 = Math.max(rz1, rz0 + 1);
 
-    for (let x = Math.max(0, rx0); x < Math.min(resolution, x1); x++) {
+    for (let x = Math.max(0, rx0); x < Math.min(resolutionX, x1); x++) {
       for (let y = Math.max(0, ry0); y < Math.min(resolutionY, y1); y++) {
         for (let z = Math.max(0, rz0); z < Math.min(resolutionZ, z1); z++) {
           const idx = index(x, y, z);
@@ -174,7 +181,7 @@ export function rasterizeItemModel(
   });
 
   const isSolid = (x: number, y: number, z: number) =>
-    x >= 0 && x < resolution && y >= 0 && y < resolutionY && z >= 0 && z < resolutionZ && owners.has(index(x, y, z));
+    x >= 0 && x < resolutionX && y >= 0 && y < resolutionY && z >= 0 && z < resolutionZ && owners.has(index(x, y, z));
 
   function colorVoxel(x: number, y: number, z: number): string | null {
     const ownerList = owners.get(index(x, y, z));
@@ -228,8 +235,8 @@ export function rasterizeItemModel(
     return null;
   }
 
-  const grid = createVoxelGrid(resolution, resolutionY, resolutionZ);
-  for (let x = 0; x < resolution; x++) {
+  const grid = createVoxelGrid(resolutionX, resolutionY, resolutionZ);
+  for (let x = 0; x < resolutionX; x++) {
     for (let y = 0; y < resolutionY; y++) {
       for (let z = 0; z < resolutionZ; z++) {
         const color = colorVoxel(x, y, z);

@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, type Dispatch, type ReactNode } from 'react';
-import type { BlockShape, BlockTextureSet, ConnectionMode, MatchedFaces, PaletteEntry, RailShape, VoxelGrid } from '../types/minecraft';
+import type { BlockShape, BlockTextureSet, BoatWood, ConnectionMode, MatchedFaces, PaletteEntry, RailShape, VoxelGrid } from '../types/minecraft';
 
 export type Resolution = 16 | 32 | 48 | 64;
 export type AppMode = 'block' | 'item' | 'structure' | 'mobs' | 'trees';
@@ -38,6 +38,7 @@ export interface AppState {
   connectionMode: ConnectionMode;
   railShape: RailShape;
   leverPowered: boolean;
+  boatWood: BoatWood;
   mode: AppMode;
   selectedItemName: string | null;
   itemVoxelGrid: VoxelGrid | null;
@@ -67,6 +68,7 @@ const initialState: AppState = {
   connectionMode: 'stored',
   railShape: 'north_south', // must match railTemplates.ts's own DEFAULT_RAIL_SHAPE
   leverPowered: false, // must match leverTemplate.ts's own DEFAULT_LEVER_POWERED
+  boatWood: 'oak', // must match boatTemplates.ts's own DEFAULT_BOAT_WOOD
   mode: 'block',
   selectedItemName: null,
   itemVoxelGrid: null,
@@ -99,6 +101,7 @@ export type AppAction =
   | { type: 'CONNECTION_MODE_CHANGED'; connectionMode: ConnectionMode }
   | { type: 'RAIL_SHAPE_CHANGED'; railShape: RailShape }
   | { type: 'LEVER_POWERED_CHANGED'; leverPowered: boolean }
+  | { type: 'BOAT_WOOD_CHANGED'; boatWood: BoatWood }
   | { type: 'MODE_CHANGED'; mode: AppMode }
   | { type: 'ITEM_VOXELIZING'; itemName: string }
   | { type: 'ITEM_VOXELIZED'; itemVoxelGrid: VoxelGrid }
@@ -121,6 +124,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         connectionMode: state.connectionMode,
         railShape: state.railShape,
         leverPowered: state.leverPowered,
+        boatWood: state.boatWood,
         mode: state.mode,
       };
     case 'ARCHIVE_LOADED':
@@ -146,6 +150,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         connectionMode: state.connectionMode,
         railShape: state.railShape,
         leverPowered: state.leverPowered,
+        boatWood: state.boatWood,
         mode: state.mode,
       };
     case 'PALETTE_BUILT':
@@ -173,11 +178,14 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, connectionMode: action.connectionMode, itemVoxelGrid: null };
     case 'RAIL_SHAPE_CHANGED':
       // Item mode only, same reasoning as CONNECTION_MODE_CHANGED: the picked rail rebuilds.
-      return { ...state, railShape: action.railShape, itemVoxelGrid: null };
+      // (the mobs-mode minecart on a rail shares this choice, so its build is dropped too)
+      return { ...state, railShape: action.railShape, itemVoxelGrid: null, mobVoxelGrid: null };
     case 'LEVER_POWERED_CHANGED':
       // Item mode only, same reasoning as CONNECTION_MODE_CHANGED/RAIL_SHAPE_CHANGED: the picked
       // lever rebuilds with the new arm angle.
       return { ...state, leverPowered: action.leverPowered, itemVoxelGrid: null };
+    case 'BOAT_WOOD_CHANGED':
+      return { ...state, boatWood: action.boatWood, mobVoxelGrid: null };
     case 'MODE_CHANGED':
       return { ...state, mode: action.mode };
     case 'ITEM_VOXELIZING':

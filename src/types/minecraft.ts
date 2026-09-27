@@ -108,3 +108,6 @@ export type RailShape =
   | 'ascending_south'
   | 'ascending_east'
   | 'ascending_west';
+
+/** A boat's wood (its `entity/boat/<wood>.png` texture) — see lib/models/boatTemplates.ts. */
+export type BoatWood = 'oak' | 'spruce' | 'birch' | 'jungle' | 'acacia' | 'dark_oak' | 'mangrove' | 'cherry' | 'pale_oak';

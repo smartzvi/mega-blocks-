@@ -26,8 +26,11 @@ export function RailShapeToggle() {
   const state = useAppState();
   const dispatch = useAppDispatch();
 
-  if (state.status !== 'ready' || state.mode !== 'item') return null;
-  if (state.selectedItemName === null || !isRailFamily(state.selectedItemName)) return null;
+  if (state.status !== 'ready') return null;
+  // Item mode's rails, and Mobs mode's minecart, which sits on whichever piece of track is picked.
+  const forRail = state.mode === 'item' && state.selectedItemName !== null && isRailFamily(state.selectedItemName);
+  const forCart = state.mode === 'mobs' && state.selectedMobName === 'minecart on rail';
+  if (!forRail && !forCart) return null;
 
   const hint = OPTIONS.find((o) => o.value === state.railShape)?.hint;
 

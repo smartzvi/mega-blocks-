@@ -1,5 +1,5 @@
 import type { FaceTexture, PaletteEntry, VoxelGrid } from '../../types/minecraft';
-import { HAND_AUTHORED_MOB_TEMPLATES } from './handAuthoredMobTemplates';
+import { resolveMobTemplate, type MobVariantOptions } from './handAuthoredMobTemplates';
 import { rasterizeItemModel } from './rasterizeModel';
 import { resolveTexturePath, texturePathToKey } from './resolveTextureVariable';
 import { filterPaletteForSource } from '../palette/glassSource';
@@ -20,13 +20,14 @@ export async function buildMobVoxelGrid(
   mobName: string,
   decodeTexture: MobTextureDecoder,
   palette: PaletteEntry[],
-  resolution: number
+  resolution: number,
+  variant?: MobVariantOptions
 ): Promise<VoxelGrid> {
-  const template = HAND_AUTHORED_MOB_TEMPLATES[mobName];
+  const template = resolveMobTemplate(mobName, variant);
   if (!template) {
     throw new Error(`"${mobName}" has no hand-authored mob template.`);
   }
-  const { model, heightUnits, depthUnits } = template;
+  const { model, heightUnits, depthUnits, widthUnits } = template;
 
   const neededKeys = new Set<string>();
   for (const el of model.elements) {
@@ -74,5 +75,5 @@ export async function buildMobVoxelGrid(
     );
   }
 
-  return rasterizeItemModel(model, textures, effectivePalette, resolution, heightUnits, depthUnits, elementPaletteOverrides);
+  return rasterizeItemModel(model, textures, effectivePalette, resolution, heightUnits, depthUnits, elementPaletteOverrides, undefined, widthUnits);
 }
