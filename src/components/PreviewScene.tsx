@@ -28,6 +28,7 @@ export function PreviewScene() {
   const isWalking = viewMode === 'walk';
   const [pointerLocked, setPointerLocked] = useState(false);
   const [isFlying, setIsFlying] = useState(false);
+  const [meshing, setMeshing] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(viewportRef);
   // Bumped every time spectator mode is left, so the `key` below forces PerspectiveCamera and
@@ -99,11 +100,14 @@ export function PreviewScene() {
 
   if (!voxelGrid || !palette) return null;
 
+  const touch = isTouchDevice();
+
   // The base camera position was tuned for a 16-cube; scale it so a 32/64-cube (or any future
   // size) is framed the same way instead of overflowing the viewport or sitting too close. Uses
   // the largest dimension so a non-cubic structure (a 2-block-tall door, a 2-block-long bed)
   // still fits entirely in frame rather than being scaled only for one axis.
-  const scale = Math.max(voxelGrid.sizeX, voxelGrid.sizeY, voxelGrid.sizeZ) / 16;
+  const maxDim = Math.max(voxelGrid.sizeX, voxelGrid.sizeY, voxelGrid.sizeZ);
+  const scale = maxDim / 16;
   // Every hand-authored mob is built with its anatomical front (head, eyes) at the low end of its
   // own Z range — real Minecraft-compass "north" — but this +Z camera corner can only ever see
   // the opposite (+Z, "south") side of anything, since a face's own outward normal has to have a
@@ -134,13 +138,29 @@ export function PreviewScene() {
           {voxelGrid.sizeX}×{voxelGrid.sizeY}×{voxelGrid.sizeZ}
         </span>
       </SectionHeader>
-      <div className={`viewport-grid relative w-full ${isFullscreen ? 'min-h-0 flex-1' : 'h-[480px]'}`}>
-        <Canvas>
-          <PerspectiveCamera key={`camera-${resetCount}`} makeDefault position={cameraPosition} fov={45} onUpdate={(c) => c.lookAt(0, 0, 0)} />
+      {/* touch-none: a drag on the model rotates it instead of scrolling the page. */}
+      <div className={`viewport-grid relative w-full touch-none ${isFullscreen ? 'min-h-0 flex-1' : 'h-[420px] sm:h-[480px]'}`}>
+        <Canvas
+          // Orbit view only redraws when the camera moves (OrbitControls invalidates on change);
+          // walk/spectator animate every frame, so they keep the continuous loop.
+          frameloop={viewMode === 'orbit' ? 'demand' : 'always'}
+          // Phones have 3x screens: rendering at 3x with antialiasing is most of their GPU budget.
+          dpr={touch ? [1, 1.5] : [1, 2]}
+          gl={{ antialias: !touch, powerPreference: 'high-performance' }}        >
+          <PerspectiveCamera
+            key={`camera-${resetCount}`}
+            makeDefault
+            position={cameraPosition}
+            fov={45}
+            // Sized to the build: the default far plane (2000) cut big structures off while rotating.
+            near={Math.max(0.05, maxDim / 2000)}
+            far={maxDim * 12 + 100}
+            onUpdate={(c) => c.lookAt(0, 0, 0)}
+          />
           <ambientLight intensity={0.6} />
           <directionalLight position={[10, 20, 10]} intensity={1.2} />
           <directionalLight position={[-10, -10, -10]} intensity={0.3} />
-          <VoxelMesh grid={voxelGrid} palette={palette} />
+          <VoxelMesh grid={voxelGrid} palette={palette} onBusyChange={setMeshing} />
           {isWalking ? (
             <WalkRig
               grid={voxelGrid}
@@ -153,9 +173,27 @@ export function PreviewScene() {
           ) : isSpectating ? (
             <SpectatorRig moveSpeed={moveSpeed} joystickRef={moveVector} />
           ) : (
-            <OrbitControls key={`orbit-${resetCount}`} enableDamping target={[0, 0, 0]} />
+            <OrbitControls
+              key={`orbit-${resetCount}`}
+              enableDamping
+              dampingFactor={0.12}
+              target={[0, 0, 0]}
+              // Zoom is multiplicative, so pinching all the way in used to park the camera almost on
+              // the orbit point, where zoom barely moves and rotation spins wildly; zooming out had
+              // no end either. Keep it between close-up and "the whole build small in view".
+              minDistance={maxDim * 0.1}
+              maxDistance={maxDim * 6}
+              rotateSpeed={touch ? 0.7 : 1}
+              zoomSpeed={touch ? 0.8 : 1}
+            />
           )}
         </Canvas>
+        {meshing && (
+          <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-control border border-line-strong bg-panel/90 px-2.5 py-1.5 text-xs text-muted">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-[1px] bg-accent" />
+            Preparing preview…
+          </div>
+        )}
         {/* Spectating shows only the movement controls themselves — no instructional text
             cluttering the render — since the joystick and buttons are self-explanatory and the
             exit control lives in the top-right control cluster. */}

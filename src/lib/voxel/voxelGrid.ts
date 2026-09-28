@@ -67,3 +67,20 @@ export function forEachVoxel(grid: VoxelGrid, callback: (x: number, y: number, z
 export function countVoxels(grid: VoxelGrid): number {
   return grid.voxels.size;
 }
+
+/** What to add to a cell's key to get the key of the cell (dx, dy, dz) away. Keys are linear in
+ *  each coordinate, so a neighbour lookup (the mesher checks 6 per voxel) needs no decode/encode. */
+export function cellKeyOffset(dx: number, dy: number, dz: number): number {
+  return dx * X_STRIDE + dy * Y_STRIDE + dz;
+}
+
+/** Decodes a packed key back into its coordinates, writing them into `out` (no allocation — the
+ *  mesher calls this once per voxel on multi-million-voxel grids). */
+export function decodeCellKey(key: number, out: [number, number, number]): void {
+  const z = key % Y_STRIDE;
+  const rest = (key - z) / Y_STRIDE;
+  const y = rest % Y_STRIDE;
+  out[0] = (rest - y) / Y_STRIDE - CELL_BIAS;
+  out[1] = y - CELL_BIAS;
+  out[2] = z - CELL_BIAS;
+}

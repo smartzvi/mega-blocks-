@@ -1,112 +1,100 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { FaceName, FaceTexture, PaletteEntry, VoxelGrid } from '../types/minecraft';
-import { forEachVoxel } from '../lib/voxel/voxelGrid';
+import type { PaletteEntry, VoxelGrid } from '../types/minecraft';
+import { packVoxelGrid } from '../lib/voxel/packGrid';
+import type { VoxelMeshChunk } from '../lib/render/voxelMesher';
+import { meshVoxelsAsync } from '../lib/render/meshClient';
+import { buildTextureAtlas, faceTilesFor } from '../lib/render/textureAtlas';
 
-// THREE.BoxGeometry material group order is [+x, -x, +y, -y, +z, -z].
-const BOX_FACE_ORDER: FaceName[] = ['east', 'west', 'top', 'bottom', 'south', 'north'];
-
-/** A palette entry's texture is usually a decoded 16x16 tile, but hand-authored templates
- *  (chest/shulker/bed/sign — see handAuthoredTemplates.ts) reference native-resolution entity
- *  atlases instead (e.g. a 64x64 chest atlas) — sizing the canvas from the texture's own
- *  width/height, not a hardcoded 16, is required or `new ImageData` throws
- *  (`IndexSizeError: input data length is not equal to 4 * width * height`) the moment one of
- *  those blocks is voxelized. */
-function textureFromFace(texture: FaceTexture): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = texture.width;
-  canvas.height = texture.height;
-  const ctx = canvas.getContext('2d')!;
-  ctx.putImageData(new ImageData(new Uint8ClampedArray(texture.data), texture.width, texture.height), 0, 0);
-  const canvasTexture = new THREE.CanvasTexture(canvas);
-  canvasTexture.magFilter = THREE.NearestFilter;
-  canvasTexture.minFilter = THREE.NearestFilter;
-  canvasTexture.colorSpace = THREE.SRGBColorSpace;
-  return canvasTexture;
-}
-
-/** Builds (and caches) one 6-entry MeshBasicMaterial array per palette block, reused across every
- *  voxel instance of that block. */
-function useBlockMaterials(palette: PaletteEntry[]): Map<string, THREE.MeshBasicMaterial[]> {
+/** One material for the whole preview: the palette's atlas, shaded per face by vertex colour. */
+function useAtlasMaterial(palette: PaletteEntry[]) {
   return useMemo(() => {
-    const cache = new Map<string, THREE.MeshBasicMaterial[]>();
-    for (const entry of palette) {
-      const materials = BOX_FACE_ORDER.map((face) => {
-        const texture = textureFromFace(entry.textures[face]);
-        return new THREE.MeshBasicMaterial({ map: texture });
-      });
-      cache.set(entry.id, materials);
-    }
-    return cache;
+    const atlas = buildTextureAtlas(palette);
+    const texture = new THREE.CanvasTexture(atlas.canvas);
+    texture.flipY = false;
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.generateMipmaps = false;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.MeshBasicMaterial({ map: texture, vertexColors: true });
+    return { atlas, material };
   }, [palette]);
 }
 
-/** One InstancedMesh for every voxel of a single block ID, sharing one geometry and one 6-entry
- *  material array (multi-material InstancedMesh requires every instance in a batch to share the
- *  exact same materials — which two distinct real blocks essentially never do, since they'd need
- *  identical textures on all 6 faces). Positions are written imperatively via setMatrixAt rather
- *  than through props, since InstancedMesh's per-instance transforms aren't a React-managed
- *  property. computeBoundingSphere() is required after setting matrices — InstancedMesh's default
- *  bounding sphere is based on the base geometry alone and doesn't account for instance
- *  transforms, which would otherwise cause incorrect frustum culling (instances near the edges of
- *  a large structure vanishing even though they're on-screen). */
-function InstancedBlockGroup({
-  geometry,
-  materials,
-  positions,
-}: {
-  geometry: THREE.BoxGeometry;
-  materials: THREE.MeshBasicMaterial[];
-  positions: [number, number, number][];
-}) {
-  const ref = useRef<THREE.InstancedMesh>(null);
-
-  useEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    const matrix = new THREE.Matrix4();
-    positions.forEach(([x, y, z], i) => {
-      matrix.setPosition(x, y, z);
-      mesh.setMatrixAt(i, matrix);
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere();
-  }, [positions]);
-
-  return <instancedMesh ref={ref} args={[geometry, materials, positions.length]} />;
+function chunkGeometry(chunk: VoxelMeshChunk): THREE.BufferGeometry {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(chunk.positions, 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(chunk.uvs, 2, true));
+  geometry.setAttribute('color', new THREE.BufferAttribute(chunk.shades, 3, true));
+  geometry.setIndex(new THREE.BufferAttribute(chunk.indices, 1));
+  geometry.computeBoundingSphere();
+  return geometry;
 }
 
-export function VoxelMesh({ grid, palette }: { grid: VoxelGrid; palette: PaletteEntry[] }) {
-  const materialsByBlock = useBlockMaterials(palette);
-  const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
-  // Each axis gets its own centering offset so a non-cubic structure (a 2-block-tall door, a
-  // 2-block-long bed) is centered on its own real extent, not squashed to match the others.
-  const offsetX = (grid.sizeX - 1) / 2;
-  const offsetY = (grid.sizeY - 1) / 2;
-  const offsetZ = (grid.sizeZ - 1) / 2;
+interface ChunkMesh {
+  geometry: THREE.BufferGeometry;
+  position: [number, number, number];
+}
 
-  // Group solid voxels by block ID: draw call count becomes "distinct block types present"
-  // (typically tens) instead of "total solid voxel count" (up to millions for a real structure),
-  // which is what actually makes large structures renderable — previously this rendered one
-  // React <mesh> element per solid voxel.
-  const groups = useMemo(() => {
-    const byBlock = new Map<string, [number, number, number][]>();
-    forEachVoxel(grid, (x, y, z, blockId) => {
-      if (!materialsByBlock.has(blockId)) return;
-      let list = byBlock.get(blockId);
-      if (!list) {
-        list = [];
-        byBlock.set(blockId, list);
-      }
-      list.push([x - offsetX, y - offsetY, z - offsetZ]);
-    });
-    return [...byBlock.entries()].map(([blockId, positions]) => ({ blockId, positions }));
-  }, [grid, materialsByBlock, offsetX, offsetY, offsetZ]);
+/**
+ * The build, as merged chunk meshes with only the faces that touch air (see voxelMesher.ts for why
+ * this replaced one instanced cube per voxel), meshed in a background worker so a big build doesn't
+ * freeze the page. The previous build stays on screen until the new one is ready. Voxel (x, y, z)
+ * spans the unit box centred on (x - offsetX, y - offsetY, z - offsetZ), so the build is centred on
+ * the origin.
+ */
+export function VoxelMesh({ grid, palette, onBusyChange }: { grid: VoxelGrid; palette: PaletteEntry[]; onBusyChange?: (busy: boolean) => void }) {
+  const { atlas, material } = useAtlasMaterial(palette);
+  const invalidate = useThree((s) => s.invalidate);
+  const [meshes, setMeshes] = useState<ChunkMesh[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    onBusyChange?.(true);
+    const packed = packVoxelGrid(grid);
+    const offsetX = (grid.sizeX - 1) / 2 + 0.5;
+    const offsetY = (grid.sizeY - 1) / 2 + 0.5;
+    const offsetZ = (grid.sizeZ - 1) / 2 + 0.5;
+
+    meshVoxelsAsync({ keys: packed.keys, ids: packed.ids, faceTiles: faceTilesFor(packed.table, atlas), tileUvs: atlas.tileUvs })
+      .then((chunks) => {
+        if (cancelled) return;
+        setMeshes(
+          chunks.map((chunk) => ({
+            geometry: chunkGeometry(chunk),
+            position: [chunk.origin[0] - offsetX, chunk.origin[1] - offsetY, chunk.origin[2] - offsetZ],
+          }))
+        );
+      })
+      .catch((error) => console.error('Preview meshing failed:', error))
+      .finally(() => {
+        if (!cancelled) onBusyChange?.(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [grid, atlas, onBusyChange]);
+
+  // The canvas only redraws on demand in orbit view, so ask for a frame once the new meshes are
+  // actually in the scene (after this commit), not when they're set, or the frame shows the old ones.
+  useEffect(() => {
+    invalidate();
+    return () => meshes.forEach((m) => m.geometry.dispose());
+  }, [meshes, invalidate]);
+  useEffect(
+    () => () => {
+      material.map?.dispose();
+      material.dispose();
+    },
+    [material]
+  );
 
   return (
     <group>
-      {groups.map(({ blockId, positions }) => (
-        <InstancedBlockGroup key={blockId} geometry={geometry} materials={materialsByBlock.get(blockId)!} positions={positions} />
+      {meshes.map((m, i) => (
+        <mesh key={i} geometry={m.geometry} material={material} position={m.position} />
       ))}
     </group>
   );
