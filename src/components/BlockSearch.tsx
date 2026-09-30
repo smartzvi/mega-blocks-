@@ -8,7 +8,7 @@ import { filterLightSourcesForSource } from '../lib/palette/lightSourceExclusion
 import { filterPaletteForOreSource } from '../lib/palette/oreSource';
 import { filterPaletteForRedstoneSource } from '../lib/palette/redstoneSource';
 import { filterPaletteForPlanksSource } from '../lib/palette/woodPlanksSource';
-import { BuildStatus, HelpText, ResultItem, ResultList, SearchField } from './ui/Search';
+import { BuildStatus, ResultItem, ResultList, SearchField } from './ui/Search';
 import { BlockIcon } from './ui/BlockIcon';
 
 export function BlockSearch() {
@@ -117,8 +117,6 @@ export function BlockSearch() {
           </ResultList>
         )}
       </div>
-      <HelpText>Only full-cube blocks — torches, rails, flowers, doors, etc. don't have a solid texture to scale up.</HelpText>
-
       {state.selectedBlockName && (
         <BuildStatus
           building={!state.matchedFaces}

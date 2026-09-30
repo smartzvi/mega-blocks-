@@ -1,26 +1,12 @@
 import { useAppDispatch, useAppState, type AppMode } from '../state/AppContext';
-import { Tag } from './ui/Panel';
 
-const MODE_OPTIONS: { value: AppMode; label: string; beta: boolean }[] = [
-  { value: 'block', label: 'Blocks', beta: false },
-  { value: 'item', label: 'Items', beta: true },
-  { value: 'structure', label: 'Structures', beta: true },
-  { value: 'mobs', label: 'Mobs', beta: true },
-  { value: 'trees', label: 'Trees', beta: true },
+const MODE_OPTIONS: { value: AppMode; label: string }[] = [
+  { value: 'block', label: 'Blocks' },
+  { value: 'item', label: 'Items' },
+  { value: 'structure', label: 'Structures' },
+  { value: 'mobs', label: 'Mobs' },
+  { value: 'trees', label: 'Trees' },
 ];
-
-/** One BETA line at the top of the setup panel, in place of a "(beta)" on every tab. */
-export function BetaNotice() {
-  const state = useAppState();
-  const mode = MODE_OPTIONS.find((m) => m.value === state.mode);
-  if (!mode?.beta) return null;
-  return (
-    <div className="-mb-1 flex items-center gap-2">
-      <Tag>Beta</Tag>
-      <span className="text-xs text-faint">{mode.label} mode is still being refined.</span>
-    </div>
-  );
-}
 
 /** Underline tabs across the top of the setup panel. */
 export function ModeToggle() {

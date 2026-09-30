@@ -3,7 +3,7 @@ import { AdRail } from './components/AdRail';
 import { AdSenseLoader } from './components/AdSenseLoader';
 import { JarStatus, UploadPanel } from './components/UploadPanel';
 import { ResolutionToggle } from './components/ResolutionToggle';
-import { BetaNotice, ModeToggle } from './components/ModeToggle';
+import { ModeToggle } from './components/ModeToggle';
 import { BlockSearch } from './components/BlockSearch';
 import { ShapeSelector } from './components/ShapeSelector';
 import { ConnectionToggle } from './components/ConnectionToggle';
@@ -27,7 +27,6 @@ function SetupPanel() {
     <section className="w-full rounded-panel border border-line bg-panel">
       <ModeToggle />
       <div className="flex flex-col gap-5 p-4 sm:p-5">
-        <BetaNotice />
         {state.mode === 'block' && <BlockSearch />}
         {state.mode === 'item' && <ItemPicker />}
         {state.mode === 'structure' && <StructurePicker />}

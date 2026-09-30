@@ -10,7 +10,7 @@ import { buildStructureGrid, warmUpStructureWorker } from '../lib/structure/stru
 import type { BuildProgress } from '../lib/structure/buildProgress';
 import { isAbortError } from '../lib/structure/isAbortError';
 import { BuildProgressBar } from './BuildProgressBar';
-import { BuildStatus, ErrorNote, HelpText, ResultItem, ResultList, ResultNote, SearchField } from './ui/Search';
+import { BuildStatus, ErrorNote, ResultItem, ResultList, ResultNote, SearchField } from './ui/Search';
 
 /** Strips a common structure-file extension (and any directory the browser's file picker might
  *  report) so a custom upload's display name matches the style of a built-in structure's name. */
@@ -205,14 +205,6 @@ export function StructurePicker() {
           />
         </label>
       </div>
-      <HelpText>
-        Voxelizes every real block through the same color-matching engine as Item mode, at{' '}
-        <span className="font-mono">
-          {state.resolution}×{state.resolution}×{state.resolution}
-        </span>{' '}
-        voxels per source block, respecting each block's real orientation (stairs, doors, logs, ...). Beds render as a
-        single matched color instead of their real shape.
-      </HelpText>
 
       {state.selectedStructureSource && <BuildStatus building={isBuilding} name={state.selectedStructureSource.name} />}
       {isBuilding && <BuildProgressBar progress={progress} />}

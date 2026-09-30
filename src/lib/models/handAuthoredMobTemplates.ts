@@ -50,14 +50,13 @@ import type { HandAuthoredTemplate } from './handAuthoredTemplates';
  *   box-UV's rect is computed from the cube's declared (pre-inflate) size, so recomputing it from
  *   the grown size would sample real texture pixels the original authoring never intended for that
  *   face (the same class of bug `insetX` avoided for cow's udder).
- * - Iron golem, snow golem, and (third batch) panda are all wider than one block: iron golem's arms
- *   sit at real X ±13, snow golem's stick arms happen to land on the exact same ±13 (26-unit span),
- *   panda's body is 19 units wide at the belly — but `rasterizeItemModel` hardcodes model-space X to
+ * - Iron golem and snow golem are both wider than one block: iron golem's arms sit at real X ±13,
+ *   and snow golem's stick arms happen to land on the exact same ±13 (26-unit span) — but `rasterizeItemModel` hardcodes model-space X to
  *   exactly 0-16 with no 2-block-wide equivalent of `heightUnits`/`depthUnits`, so anything past 16
  *   silently clips. The first fix attempt (`scaleXBounds`, since removed) compressed only X, leaving
  *   Y/Z at full real scale — a real user screenshot showed this reads as an unrecognizably tall,
  *   thin figure with arms sticking out from a skinny body, not a stocky golem. `scaleBounds` scales
- *   every axis by the same factor instead (per mob: 8/13 for both golems, 16/19 for panda — landing
+ *   every axis by the same factor instead (8/13 for both golems — landing
  *   the widest real span exactly at the 16-unit ceiling), preserving the true width:height:depth
  *   ratio at the cost of each ending up shorter than its real absolute in-game height — again
  *   leaving `faces` untouched so real UV mapping stays correct.
@@ -72,13 +71,8 @@ import type { HandAuthoredTemplate } from './handAuthoredTemplates';
  *   skeleton's shared-limb-texture), matching the visually-correct two-arms-akimbo silhouette
  *   rather than the literal (but misleading) raw data.
  *
- * Third batch — panda replaces villager and slime (removed per user request; their geometry can be
- * restored from git history if reintroduced later). Panda's body has the same `bind_pose_rotation`
- * as pig/sheep and needed `scaleBounds` (above) for its overweight body — no other new technique;
- * every leg and ear has its own explicit origin in the real geo.json (no `"mirror": true` flag the
- * way villager's did), so each is transcribed literally rather than built from one side via
- * `mirrorX`. Its black eye patches and belly patch are baked into the texture, not separate
- * geometry — the same "no geometry needed" pattern slime's core used to be.
+ * Removed per user request (their geometry can be restored from git history if reintroduced
+ * later): villager and slime, and later panda and witch.
  *
  * Coordinates are transcribed in each mob's own raw geo.json space (not yet shifted into the
  * non-negative range `BlockModelElement.from/to` needs — `rasterizeItemModel` silently clips
@@ -86,7 +80,7 @@ import type { HandAuthoredTemplate } from './handAuthoredTemplates';
  * computes each model's real bounding box and shifts every element into place, deriving
  * `heightUnits`/`depthUnits` from that same box rather than a hardcoded guess. Model-space X is
  * always exactly 0-16 (matching every other hand-authored template) with no equivalent "widthUnits"
- * — mobs whose raw data is wider than that (iron golem, snow golem, panda) go through `scaleBounds`
+ * — mobs whose raw data is wider than that (iron golem, snow golem) go through `scaleBounds`
  * first so every element ends up within 0-16 before `normalizeMobModel` ever runs.
  */
 
@@ -476,104 +470,6 @@ function ironGolemModel(textureKey: string): HandAuthoredTemplate {
   return normalizeMobModel(elements, { main: textureKey });
 }
 
-// Panda's body is 19 units wide at its widest real point (the belly, per the raw geo.json),
-// exceeding the 16-unit model-space X ceiling — the same "wider than one block" situation as iron
-// golem/snow golem. See `scaleBounds`.
-const PANDA_SCALE = 16 / 19;
-
-// Confirmed-solid small texture patches used to redesign the body/head below (see the doc on
-// pandaModel) — each was found by decoding the real `panda/panda` texture directly and scanning
-// for a rectangle that's uniformly one color, not guessed: PANDA_WHITE sits inside a 14-row-tall
-// all-white band, PANDA_BLACK inside a 10-row-tall all-black band, both within the real body's
-// own box-UV side-cell region.
-const PANDA_WHITE: [number, number, number, number] = [50, 55, 52, 57];
-const PANDA_BLACK: [number, number, number, number] = [48, 42, 50, 44];
-
-/**
- * Panda's body bone has the same 90°-around-X `bind_pose_rotation` as pig/sheep, and every cube
- * (like every other cube here) is uniformly `scaleBounds`-ed down to fit the 16-unit X ceiling.
- *
- * The body and head are hand-redesigned rather than a literal geo.json transcription, per real
- * user feedback comparing a render against the official reference: the body bone's own natural
- * box-UV wrap (`rotatedBodyElement` + the raw `origin`/`size`/`uv`, still used for every OTHER mob
- * here) puts a real, confirmed-genuine black band across ~38% of the body's length (verified by
- * decoding the real texture row-by-row: the region our rotation math correctly maps to the
- * dorsal/top surface has a clean 2-white/10-black/14-white row pattern, out of 26 total) — far
- * wider than the reference's narrow shoulder saddle. Rather than trust a single monolithic box's
- * texture-wrap proportions (which don't cleanly separate "top" from "sides wrapping down" the way
- * a flat box-UV rect assumes for a real photographically-painted animal), the torso is now two
- * separate `stretchedBox` elements sharing the body bone's exact real rotated bounds (computed by
- * hand from `rotatedBodyElement`'s own y'/z' formulas, since only the color source needs to
- * differ): a plain white main torso, and a black saddle band deliberately narrowed to ~19% of the
- * body's real length (5 of 26 units), positioned flush against the body's front edge (i.e. right
- * behind the head, matching the reference). Both use confirmed solid-color patches
- * (`PANDA_WHITE`/`PANDA_BLACK`) instead of the natural wrap, so their color no longer depends on
- * exactly which box-UV cell the rotation math selects.
- *
- * The head is the same fix as the torso, for the same reason: its real box-UV wrap DOES contain
- * reasonably-proportioned eye patches (confirmed by decoding the region directly — two ~5×3
- * roughly square black patches, not stretched lines) — but a first attempt that kept the head's
- * natural wrap *and* added dedicated eye elements on top produced eye patches wider than intended,
- * because the head's own pre-existing black eye-region and the new dedicated eye elements
- * overlapped at the same rough position without one fully overriding the other (the dedicated
- * elements are narrower than the full head width, so the head's own wrap still showed through
- * outside them). Fixed by making the head a plain white `stretchedBox` too, same as the torso, so
- * ALL head detail — both eyes and the nose — now comes exclusively from dedicated elements with
- * exact, predictable proportions: `stretchedBox` eye patches protruding slightly in front of the
- * head's own face, and a thickened snout (depth doubled from the real 2 units to 4, extended
- * further forward rather than just resized in place, so it reads as a real 3D protrusion instead
- * of a nearly-flat decal) — the latter a deliberate proportion departure from the literal
- * geo.json, same class of adjustment already made for iron golem/snow golem/panda's own body
- * scale, where a literal transcription didn't hold up against real visual testing.
- *
- * No mirrored limbs or ears — each leg and ear has its own explicit origin in the real geo.json (no
- * `"mirror": true` flag the way villager's did), so every cube is transcribed literally rather than
- * built from one side via `mirrorX`. Sourced from Mojang's `bedrock-samples` `panda.geo.json`
- * (declared texture_width/height 64x64, confirmed) — every bone was checked explicitly for a
- * rotation/bind_pose_rotation field rather than assuming absence means zero, per this file's
- * established method; only the body bone has one.
- */
-function pandaModel(textureKey: string): HandAuthoredTemplate {
-  const scaledCube = (cube: RawCube) => scaleBounds(cubeElement(cube, 'main'), PANDA_SCALE);
-  const scaledStretch = (from: [number, number, number], to: [number, number, number], rect: [number, number, number, number]) =>
-    scaleBounds(stretchedBox(from, to, rect, 'main'), PANDA_SCALE);
-
-  // Body bone's real rotated (pre-scale) bounds — hand-derived from rotatedBodyElement's own
-  // formula for origin [-9.5,1,-6.5] size [19,26,13] pivot [14,0]: y' = 14+(z-0), z' = 0-(y-14).
-  const TORSO_X: [number, number] = [-9.5, 9.5];
-  const TORSO_Y: [number, number] = [7.5, 20.5];
-  const TORSO_Z_FRONT = -13; // flush against the head's own back edge (head spans Z -21 to -12)
-  const TORSO_Z_BACK = 13;
-  const SADDLE_Z_BACK = TORSO_Z_FRONT + 5; // ~19% of the real 26-unit body length, not ~38%
-
-  // Snout's own front-facing ("south", pre-mirror — mirrorFrontBack flips it to physical "north"
-  // matching this file's front=Z-low convention, same reasoning as boxElement's south assumption)
-  // gets the confirmed nose patch; every other face gets the confirmed white patch.
-  const snoutNoseFace = { uv: PANDA_BLACK, texture: '#main' };
-  const snoutWhiteFace = { uv: PANDA_WHITE, texture: '#main' };
-  const snout: BlockModelElement = {
-    from: [-3.5, 7.5, -25],
-    to: [3.5, 12.5, -21], // depth doubled from the real 2 units to 4, extended further forward
-    faces: { top: snoutWhiteFace, bottom: snoutWhiteFace, south: snoutNoseFace, north: snoutWhiteFace, east: snoutWhiteFace, west: snoutWhiteFace },
-  };
-
-  const elements = [
-    scaledStretch([TORSO_X[0], TORSO_Y[0], TORSO_Z_FRONT], [TORSO_X[1], TORSO_Y[1], TORSO_Z_BACK], PANDA_WHITE), // torso
-    scaledStretch([TORSO_X[0], TORSO_Y[0], TORSO_Z_FRONT], [TORSO_X[1], TORSO_Y[1], SADDLE_Z_BACK], PANDA_BLACK), // saddle band
-    scaledStretch([-6.5, 7.5, -21], [6.5, 17.5, -12], PANDA_WHITE), // head — plain white, real eye detail comes from the dedicated eye/nose elements below instead of the head's own natural box-UV wrap (which duplicated them at a wider, less controlled proportion)
-    scaleBounds(snout, PANDA_SCALE),
-    scaledStretch([-5.5, 12, -21.5], [-1.5, 15, -21], PANDA_BLACK), // left eye patch
-    scaledStretch([1.5, 12, -21.5], [5.5, 15, -21], PANDA_BLACK), // right eye patch
-    scaledCube({ origin: [-8.5, 16.5, -18], size: [5, 4, 1], uv: [52, 25] }), // left ear
-    scaledCube({ origin: [3.5, 16.5, -18], size: [5, 4, 1], uv: [52, 25] }), // right ear
-    scaledCube({ origin: [-8.5, 0, 6], size: [6, 9, 6], uv: [40, 0] }), // back-left leg
-    scaledCube({ origin: [2.5, 0, 6], size: [6, 9, 6], uv: [40, 0] }), // back-right leg
-    scaledCube({ origin: [-8.5, 0, -12], size: [6, 9, 6], uv: [40, 0] }), // front-left leg
-    scaledCube({ origin: [2.5, 0, -12], size: [6, 9, 6], uv: [40, 0] }), // front-right leg
-  ];
-  return normalizeMobModel(elements, { main: textureKey });
-}
-
 // Forced-color restrictions for bee's small accent parts (see beeModel's doc) — the natural
 // box-UV wrap for these tiny elements was landing on stray, visually-wrong colors (most visibly,
 // the antennae reading as isolated teal/cyan "eye" spots, from `lightSource` entries and other
@@ -657,11 +553,11 @@ const BEE_EYE_PALETTE = [...BEE_BLACK_PALETTE, 'minecraft:stripped_warped_stem',
 /**
  * Fourth batch — bee, added per user request, then cleaned up across two further rounds of real
  * user feedback on screenshots. No `bind_pose_rotation` anywhere (the body bone is already
- * authored lying flat/horizontal in the raw geo.json, unlike pig/sheep/panda's vertical-then-
+ * authored lying flat/horizontal in the raw geo.json, unlike pig/sheep's vertical-then-
  * rotated body), so the body stays a single plain `cubeElement` using its real origin/size/uv
  * untouched — a clean solid cuboid with the real texture's natural yellow/black stripe pattern,
- * per the user's explicit request not to flatten it to a single color the way panda's torso/head
- * were.
+ * per the user's explicit request not to flatten it to a single color the way the (since removed)
+ * panda's torso/head were.
  *
  * **Antennae/leg/stinger color cleanup (round two)**: the first version left these small accent
  * parts on the natural box-UV wrap, same as everything else — but for parts this small, the real
@@ -704,7 +600,7 @@ const BEE_EYE_PALETTE = [...BEE_BLACK_PALETTE, 'minecraft:stripped_warped_stem',
  * that exact spot (confirmed no `blue`/`cyan`/`light_blue` block appears anywhere in a built bee's
  * material list, so "blue eyes" was this pale highlight reading as cool-toned against the dark
  * head/collar patch around it, not an actual palette mismatch). Both traced to the same root cause
- * — the natural wrap's per-pixel detail — and both fixed the same way panda's torso/head were:
+ * — the natural wrap's per-pixel detail — and both fixed the same way the (since removed) panda's torso/head were:
  * the body element itself is now a `stretchedBox` sourcing every voxel from one small confirmed
  * solid patch (`BEE_YELLOW`) instead of its natural per-voxel wrap, eliminating the mosaic and the
  * stray highlight in one change, and also making the 2 rear stripes read unambiguously as the
@@ -764,7 +660,7 @@ const BEE_EYE_PALETTE = [...BEE_BLACK_PALETTE, 'minecraft:stripped_warped_stem',
  * The wings (`rightwing_bone`/`leftwing_bone`) are unchanged since round one — hand-redesigned
  * rather than transcribed literally, since each raw cube is zero-thickness (`size:[9,0,6]`) and
  * each wing bone additionally carries a real two-axis `rotation` field (`[15,-15,0]`/`[15,15,0]`)
- * with no dedicated rotation math in this file (only pig/sheep/panda body's single 90°-around-X
+ * with no dedicated rotation math in this file (only pig/sheep body's single 90°-around-X
  * case is handled, via `rotatedBodyElement`) — and even correct rotation math would still have to
  * degrade to *some* axis-aligned bounding box for this voxel-grid engine, which is a poor visual
  * match for a large tilted flat plane regardless. The literal unrotated cube position was checked
@@ -946,8 +842,7 @@ function beeModel(textureKey: string): HandAuthoredTemplate {
  * time, but concrete enough to act on directly):**
  * - **Tail "not oriented right"**: the raw geo.json tail bone has no rotation anywhere, authored as
  *   a literal vertical post (8 tall × 2 deep) directly behind the body — reads as a flagpole, not a
- *   tail, once voxelized with no animation to soften it. Same class of departure as panda's snout /
- *   bee's wings (hand-placed silhouette instead of literal transcription): rebuilt as a
+ *   tail, once voxelized with no animation to soften it. Same class of departure as bee's wings (hand-placed silhouette instead of literal transcription): rebuilt as a
  *   backward-and-slightly-up-pointing box (the opposite ratio) flush against the body's real rear
  *   edge. Built via `stretchedBox` sourcing one small confirmed-uniform real fur patch
  *   (`WOLF_TAIL_FUR_RECT`, decoded directly — the tail's real painted region is a flat light gray
@@ -1056,121 +951,6 @@ function wolfModel(textureKey: string): HandAuthoredTemplate {
 }
 
 /**
- * Sixth batch — witch, added per user request. Fetched real geo.json directly from Mojang's
- * bedrock-samples repo: witch is a *composited* mob — `witch.geo.json` (byte-identical to the
- * older `witch_v1.0.geo.json`) is a small "attachable" file that only adds a `nose` (overriding the
- * base villager's own) and a 4-tier stacked `hat` (parented to `head`), layered on top of the plain
- * `villager.geo.json`'s body/arms/legs/head — the real 1.8-format villager base geometry, fetched
- * separately and confirmed to have no `bind_pose_rotation`/`rotation` anywhere except the hat's own
- * small progressive tilts (`hat2`/`hat3`/`hat4`: `[-3,0,1.5]`/`[-6,0,3]`/`[-12,0,6]`) — a handful of
- * degrees each, not the 90°-around-X case `rotatedBodyElement` handles, and too small to matter at
- * this engine's voxel resolution, so each hat tier is transcribed as a plain axis-aligned stack
- * instead (the tilts are what give the real hat its slight forward-leaning curve — ignoring them
- * just makes it a straight cone, a reasonable approximation for a part this small).
- *
- * Real texture verified directly (`witch`, 64×128 — note the *bare* key `witch`, not `witch/witch`
- * like most other mobs, confirmed by listing `entityTextureFiles`): the body's real UV is genuinely
- * 2 stacked cubes (`uv:[16,20]` undertunic + `uv:[0,38]` outer robe, `inflate:0.5`), but direct pixel
- * sampling of both cubes' real from/to bounds found the outer robe cube already fully contains the
- * undertunic's entire X/Y/Z range — the same "fully-contained duplicate slice" situation wolf's own
- * separate body bone was in (see wolfModel's round-three doc) — so only the outer robe cube is kept
- * below; the undertunic is real geometry but never actually visible in the composited result, same
- * reasoning, not a guess. Real X-width (arms span X -8 to 8, 16 units) already fits this engine's
- * ceiling exactly, so no `scaleBounds` needed.
- *
- * **Round two — real user feedback against a reference screenshot found the first pass wrong on
- * several fronts, each traced to a real, verifiable texture-reading mistake rather than fixed by
- * guessing:**
- *
- * - **Robe/arm color**: real raw pixels (RGB ~54,23,88) are objectively closer in Lab distance to
- *   `blue_terracotta` than to any purple block (confirmed: deltaE 14.7 vs 30 for
- *   `purple_terracotta`) — force-restricted to purple regardless, since that's witch's single most
- *   iconic real-world trait. Also flattened to one clean sampled patch (`WITCH_ROBE_RECT`, the same
- *   technique bee's body used) instead of the natural per-voxel wrap, which read as a noisy
- *   multi-shade patchwork in the reference comparison — real texture folds/shading are subtle
- *   enough here that a flat color reads cleaner.
- * - **Green robe stripe**: direct pixel sampling of the robe's real front-face rect found a genuine,
- *   clean, deliberately-painted 2-column-wide green stripe running almost the robe's full height
- *   (confirmed: pure green pixels at every row from the robe's near-top down to its bottom, flanked
- *   by purple on both sides) — a real, distinct feature the first pass's flat single-element body
- *   had no way to show. Added as its own thin front-face overlay, the same technique the bee's
- *   black stripes use.
- * - **Hat gem**: direct pixel sampling of hat tier 2's real front-face rect found a genuine
- *   symmetric 5×4 diamond of bright green pixels (peak RGB ~37,180,53) — round one's real-jar
- *   verification *did* see stray green appear for this element, but it was misread as noise and
- *   restricted away to solid black along with the other 3 (genuinely plain-black) tiers. Tier 2 now
- *   gets its own restriction (black + green) instead of the shared `WITCH_HAT_PALETTE`, letting the
- *   real gem pattern survive.
- * - **Face**: direct pixel sampling of the head's real front-face rect found a genuine dark eyebrow
- *   band and white eye pixels over warm tan skin (not gray) — round one's `WITCH_HEAD_PALETTE` was
- *   light-gray/white only, with no dark option, so the eyebrow pixels got forced to the closest
- *   available light tone and vanished entirely; separately, the skin tone itself was wrong (the
- *   unrestricted natural match for real skin RGB, `light_gray_wool`, is a worse raw fit — deltaE
- *   20.5 vs `packed_mud` — than what round one assumed). Replaced with a skin+black+white palette.
- * - **Crossed arms**: the base villager geo.json's arms hang straight down, but real witches render
- *   with arms bent and crossed in front (a pose Bedrock applies separately from this base geometry,
- *   which this engine has no rotation math to reproduce anyway) — per explicit user request, each
- *   arm is now 2 segments (upper arm near the shoulder, forearm bending inward across the front of
- *   the chest) instead of 1 straight hanging box, the same segmented-approximation technique the
- *   bee's angled-up wings use for a similarly un-rotatable real pose.
- */
-const WITCH_ROBE_PALETTE = ['minecraft:purple_terracotta', 'minecraft:purple_concrete', 'minecraft:purple_wool'];
-const WITCH_LEG_PALETTE = ['minecraft:brown_terracotta', 'minecraft:brown_concrete'];
-// Skin (packed_mud/sandstone — real deltaE confirmed these beat the natural unrestricted match)
-// plus black (eyebrow) and white (eye) so the head's real facial detail survives instead of being
-// forced into a uniform gray, per real user feedback that the face read as a blank block.
-const WITCH_HEAD_PALETTE = ['minecraft:packed_mud', 'minecraft:sandstone', 'minecraft:black_concrete', 'minecraft:white_wool'];
-const WITCH_HAT_PALETTE = ['minecraft:black_concrete', 'minecraft:black_wool', 'minecraft:black_terracotta'];
-// Black plus green, for hat tier 2 specifically — see the real gem finding above.
-const WITCH_HAT_GEM_PALETTE = [...WITCH_HAT_PALETTE, 'minecraft:green_concrete', 'minecraft:lime_concrete'];
-// A confirmed clean, solid purple patch (real column x7, no stripe contamination) used to flatten
-// the robe/arms to one color instead of their natural noisy per-voxel wrap.
-const WITCH_ROBE_RECT: [number, number, number, number] = [7, 50, 8, 51];
-// A confirmed real green pixel from the robe's own stripe column — used for the dedicated stripe
-// overlay below (any valid uv works here since the palette restriction forces green regardless).
-const WITCH_STRIPE_RECT: [number, number, number, number] = [9, 50, 10, 51];
-
-function witchModel(textureKey: string): HandAuthoredTemplate {
-  const elements = [
-    cubeElement({ origin: [-4, 6, -3], size: [8, 18, 6], uv: [0, 38] }, 'main'), // robe (body) — real outer-robe cube only; the real undertunic cube beneath it is fully contained and never visible, same situation wolf's redundant body slice was in
-    stretchedBox([-1, 9, -3], [1, 23, -2], WITCH_STRIPE_RECT, 'main'), // green center stripe — real, flush on the robe's own front face
-    cubeElement({ origin: [-4, 24, -4], size: [8, 10, 8], uv: [0, 0] }, 'main'), // head
-    cubeElement({ origin: [0, 25, -6.75], size: [1, 1, 1], uv: [0, 0] }, 'main'), // nose — left unrestricted: tiny (1 real unit), low visual impact
-    stretchedBox([-4, 16, -2], [4, 20, 2], WITCH_ROBE_RECT, 'main'), // arm shoulder plank — flattened to match the robe
-    // Crossed arms (round two): upper-arm segment near the shoulder, then a forearm segment that
-    // bends inward and forward across the chest instead of hanging straight down — see doc above.
-    stretchedBox([-8, 20, -2], [-4, 24, 2], WITCH_ROBE_RECT, 'main'), // left upper arm
-    stretchedBox([4, 20, -2], [8, 24, 2], WITCH_ROBE_RECT, 'main'), // right upper arm
-    stretchedBox([-6, 16, -4], [1, 20, -2], WITCH_ROBE_RECT, 'main'), // left forearm — bends forward and across toward center
-    stretchedBox([-1, 16, -4], [6, 20, -2], WITCH_ROBE_RECT, 'main'), // right forearm — mirrored, overlapping at center to read as crossed
-    cubeElement({ origin: [-4, 0, -2], size: [4, 12, 4], uv: [0, 22] }, 'main'), // left leg
-    cubeElement({ origin: [0, 0, -2], size: [4, 12, 4], uv: [0, 22] }, 'main'), // right leg
-    // Hat: 4 stacked tiers, real origin/size/uv, small real rotations ignored (see doc above).
-    cubeElement({ origin: [-5, 32.05, -5], size: [10, 2, 10], uv: [0, 64] }, 'main'), // hat brim
-    cubeElement({ origin: [-3.25, 33.5, -3], size: [7, 4, 7], uv: [0, 76] }, 'main'), // hat tier 2 — carries the real green gem
-    cubeElement({ origin: [-1.5, 36.5, -1], size: [4, 4, 4], uv: [0, 87] }, 'main'), // hat tier 3
-    cubeElement({ origin: [0.25, 40, 1], size: [1, 2, 1], uv: [0, 95] }, 'main'), // hat tip
-  ];
-  const restrictions: Record<number, string[]> = {
-    0: WITCH_ROBE_PALETTE, // robe
-    1: ['minecraft:green_concrete', 'minecraft:lime_concrete'], // stripe
-    2: WITCH_HEAD_PALETTE, // head
-    4: WITCH_ROBE_PALETTE, // arm plank
-    5: WITCH_ROBE_PALETTE,
-    6: WITCH_ROBE_PALETTE, // 2 upper arms
-    7: WITCH_ROBE_PALETTE,
-    8: WITCH_ROBE_PALETTE, // 2 forearms
-    9: WITCH_LEG_PALETTE,
-    10: WITCH_LEG_PALETTE, // 2 legs
-    11: WITCH_HAT_PALETTE, // hat brim
-    12: WITCH_HAT_GEM_PALETTE, // hat tier 2 — the real gem
-    13: WITCH_HAT_PALETTE,
-    14: WITCH_HAT_PALETTE, // hat tier 3 + tip
-  };
-  return normalizeMobModel(elements, { main: textureKey }, restrictions);
-}
-
-/**
  * Default variant only for v1 (see the project's Mobs-mode plan) — real mobs have biome/profession
  * texture variants (`pig/warm_pig.png`, `pig/cold_pig.png`, ...) that aren't picked yet; adding a
  * variant picker later is a clean extension of this same flat-registry pattern, mirroring how
@@ -1184,10 +964,8 @@ export const HAND_AUTHORED_MOB_TEMPLATES: Record<string, HandAuthoredTemplate> =
   'snow golem': snowGolemModel('snow_golem'),
   sheep: sheepModel('sheep/sheep', 'sheep/sheep_wool'),
   'iron golem': ironGolemModel('iron_golem/iron_golem'),
-  panda: pandaModel('panda/panda'),
   bee: beeModel('bee/bee'),
   wolf: wolfModel('wolf/wolf'),
-  witch: witchModel('witch'),
   minecart: minecartTemplate(),
   'minecart on rail': minecartOnRailTemplate('north_south'),
   boat: boatTemplateFor(DEFAULT_BOAT_WOOD),

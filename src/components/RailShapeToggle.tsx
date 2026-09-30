@@ -33,15 +33,12 @@ export function RailShapeToggle() {
   const forCart = state.mode === 'mobs' && state.selectedMobName === 'minecart on rail';
   if (!forRail && !forCart) return null;
 
-  const hint = OPTIONS.find((o) => o.value === state.railShape)?.hint;
-
   return (
     <SegmentedControl
       label="Rail shape"
       options={OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.hint }))}
       value={state.railShape}
       onChange={(railShape) => dispatch({ type: 'RAIL_SHAPE_CHANGED', railShape })}
-      hint={hint}
     />
   );
 }

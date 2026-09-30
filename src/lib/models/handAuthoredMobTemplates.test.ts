@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { HAND_AUTHORED_MOB_TEMPLATES } from './handAuthoredMobTemplates';
 
-const MOB_NAMES = ['pig', 'chicken', 'zombie', 'skeleton', 'snow golem', 'sheep', 'iron golem', 'panda', 'bee', 'wolf', 'witch', 'minecart', 'minecart on rail', 'boat'];
+const MOB_NAMES = ['pig', 'chicken', 'zombie', 'skeleton', 'snow golem', 'sheep', 'iron golem', 'bee', 'wolf', 'minecart', 'minecart on rail', 'boat'];
 
 describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
-  it('has exactly the 11 starter mobs plus the minecart, minecart on rail and boat, each with a real entity texture key', () => {
+  it('has exactly the 9 mobs plus the minecart, minecart on rail and boat, each with a real entity texture key', () => {
     expect(Object.keys(HAND_AUTHORED_MOB_TEMPLATES).sort()).toEqual([...MOB_NAMES].sort());
     expect(HAND_AUTHORED_MOB_TEMPLATES.pig.model.textures.main).toBe('pig/temperate_pig');
     expect(HAND_AUTHORED_MOB_TEMPLATES.chicken.model.textures.main).toBe('chicken/temperate_chicken');
@@ -14,12 +14,8 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(HAND_AUTHORED_MOB_TEMPLATES.sheep.model.textures.main).toBe('sheep/sheep');
     expect(HAND_AUTHORED_MOB_TEMPLATES.sheep.model.textures.wool).toBe('sheep/sheep_wool');
     expect(HAND_AUTHORED_MOB_TEMPLATES['iron golem'].model.textures.main).toBe('iron_golem/iron_golem');
-    expect(HAND_AUTHORED_MOB_TEMPLATES.panda.model.textures.main).toBe('panda/panda');
     expect(HAND_AUTHORED_MOB_TEMPLATES.bee.model.textures.main).toBe('bee/bee');
     expect(HAND_AUTHORED_MOB_TEMPLATES.wolf.model.textures.main).toBe('wolf/wolf');
-    // Witch's real entity texture key is the bare `witch`, not `witch/witch` like most other
-    // mobs — confirmed by listing the real jar's entityTextureFiles directly, not assumed.
-    expect(HAND_AUTHORED_MOB_TEMPLATES.witch.model.textures.main).toBe('witch');
   });
 
   it('every element stays within its model-space X extent (16, or its declared widthUnits) for every mob — rasterizeItemModel silently clips out-of-range X, so this must hold exactly (this is the real regression test for iron golem, the first mob wider than one block)', () => {
@@ -60,8 +56,8 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     }
   });
 
-  it('quadrupeds (pig/chicken/sheep/panda/wolf): legs touch the ground and the body sits above them, not floating or sunk', () => {
-    for (const name of ['pig', 'chicken', 'sheep', 'panda', 'wolf']) {
+  it('quadrupeds (pig/chicken/sheep/wolf): legs touch the ground and the body sits above them, not floating or sunk', () => {
+    for (const name of ['pig', 'chicken', 'sheep', 'wolf']) {
       const { model } = HAND_AUTHORED_MOB_TEMPLATES[name];
       // Every model's leg elements are the shortest-Y-extent elements touching y=0 — just assert
       // at least one element starts exactly at the ground.
@@ -69,12 +65,12 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     }
   });
 
-  it('pig, sheep, and panda bodies were correctly rotated to a horizontal, not vertical, shape (deeper in Z than tall in Y)', () => {
+  it('pig and sheep bodies were correctly rotated to a horizontal, not vertical, shape (deeper in Z than tall in Y)', () => {
     // The body is always the element with the largest single-axis span among the torso pieces —
     // simplest robust check: the tallest single element's Y-span should not dwarf its Z-span the
     // way an un-rotated (still-vertical) body box would (pig raw body pre-rotation is 16 tall by
     // 8 deep — a 2:1 ratio the wrong way).
-    for (const name of ['pig', 'sheep', 'panda']) {
+    for (const name of ['pig', 'sheep']) {
       const { model } = HAND_AUTHORED_MOB_TEMPLATES[name];
       const bodyLike = model.elements.reduce((biggest, el) => {
         const vol = (el.to[0] - el.from[0]) * (el.to[1] - el.from[1]) * (el.to[2] - el.from[2]);
@@ -141,10 +137,6 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(h('pig')).toBeLessThan(h('iron golem'));
     expect(h('iron golem')).toBeLessThan(h('zombie'));
     expect(h('skeleton')).toBe(h('zombie'));
-    // Panda is scaled down the same way (16/19, see the file header) for its overweight body —
-    // still a bulky mob, taller than pig, but shorter than the unscaled zombie/skeleton.
-    expect(h('pig')).toBeLessThan(h('panda'));
-    expect(h('panda')).toBeLessThan(h('zombie'));
   });
 
   it('snow golem\'s two arms are placed symmetrically on either side, not both on the same side — the raw geo.json defines them with byte-identical origin/size/uv (confirmed by fetching the raw JSON directly), which would literally overlap if used as-is', () => {
@@ -228,59 +220,6 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     const woolHead = model.elements[woolStart + 1];
     const baseHead = model.elements[1];
     expect(woolHead.to[2] - woolHead.from[2]).not.toBe(baseHead.to[2] - baseHead.from[2]);
-  });
-
-  it('panda has 12 elements (torso + saddle band + head + snout + 2 eyes + 2 ears + 4 legs), symmetric parts placed one on each side', () => {
-    const { model } = HAND_AUTHORED_MOB_TEMPLATES.panda;
-    expect(model.elements.length).toBe(12);
-    const [, , , , leftEye, rightEye, leftEar, rightEar, backLeftLeg, backRightLeg, frontLeftLeg, frontRightLeg] = model.elements;
-    for (const [left, right] of [
-      [leftEye, rightEye],
-      [leftEar, rightEar],
-      [backLeftLeg, backRightLeg],
-      [frontLeftLeg, frontRightLeg],
-    ] as const) {
-      expect(right.to[0] - right.from[0]).toBe(left.to[0] - left.from[0]); // same size
-      expect(left.to[0]).toBeLessThanOrEqual(right.from[0]); // non-overlapping, one on each side
-    }
-  });
-
-  it('panda\'s black saddle band is narrow (well under half the body\'s real length) and sits flush against the body\'s own front edge — regression test for real user feedback that a first version\'s black band, using the body bone\'s natural (unmodified) box-UV wrap, covered far too much of the body', () => {
-    const { model } = HAND_AUTHORED_MOB_TEMPLATES.panda;
-    const [torso, saddle] = model.elements;
-    // Both share the torso's exact X/Y footprint and front edge — only the saddle's back edge
-    // differs (it's the narrower one).
-    expect(saddle.from[0]).toBeCloseTo(torso.from[0], 5);
-    expect(saddle.to[0]).toBeCloseTo(torso.to[0], 5);
-    expect(saddle.from[2]).toBeCloseTo(torso.from[2], 5);
-    const saddleLength = saddle.to[2] - saddle.from[2];
-    const torsoLength = torso.to[2] - torso.from[2];
-    expect(saddleLength).toBeLessThan(torsoLength * 0.3); // narrow band, not the ~38% the raw wrap gave
-    expect(saddle.to[2]).toBeLessThan(torso.to[2]); // doesn't extend anywhere near the rear
-  });
-
-  it('panda\'s snout is thicker (deeper in Z) than its real 2-unit geo.json depth, extending forward from the head rather than just resized in place — a deliberate proportion departure per real user feedback that it looked flat/squished', () => {
-    const { model } = HAND_AUTHORED_MOB_TEMPLATES.panda;
-    const head = model.elements[2];
-    const snout = model.elements[3];
-    const snoutDepth = snout.to[2] - snout.from[2];
-    const realUnscaledDepth = 2 * (16 / 19); // real geo.json depth (2 units) scaled by the same 16/19 factor
-    expect(snoutDepth).toBeGreaterThan(realUnscaledDepth);
-    // Still attaches flush to the head's own front edge, just extends further forward from there.
-    expect(snout.to[2]).toBeCloseTo(head.from[2], 5);
-    expect(snout.from[2]).toBeLessThan(head.from[2]); // extends in front of (not behind) the head
-  });
-
-  it('panda\'s widest real point (its body) lands exactly at the 0-16 model-space X ceiling — proves the 16/19 X-compression factor was computed correctly, not just "happens to fit"', () => {
-    const { model } = HAND_AUTHORED_MOB_TEMPLATES.panda;
-    let minX = Infinity;
-    let maxX = -Infinity;
-    for (const el of model.elements) {
-      minX = Math.min(minX, el.from[0], el.to[0]);
-      maxX = Math.max(maxX, el.from[0], el.to[0]);
-    }
-    expect(minX).toBeCloseTo(0, 5);
-    expect(maxX).toBeCloseTo(16, 5);
   });
 
   it('iron golem\'s widest real point (its two arms) lands exactly at the 0-16 model-space X ceiling — proves the X-compression factor was computed correctly, not just "happens to fit"', () => {
@@ -621,89 +560,5 @@ describe('HAND_AUTHORED_MOB_TEMPLATES', () => {
     expect(headPalette).toContain('minecraft:black_concrete');
     expect(headPalette).toContain('minecraft:white_wool');
     expect(headPalette).toContain('minecraft:light_gray_wool');
-  });
-
-  it('witch has 15 elements (robe + green stripe + head + nose + arm plank + 2 upper arms + 2 forearms + 2 legs + 4 hat tiers) — the real undertunic cube beneath the robe is dropped, fully contained and never visible (same situation wolf\'s redundant body slice was in), and no bind_pose_rotation exists anywhere in the real villager/witch geo.json so no scaleBounds/rotatedBodyElement needed', () => {
-    const { model } = HAND_AUTHORED_MOB_TEMPLATES.witch;
-    expect(model.elements.length).toBe(15);
-  });
-
-  it('witch\'s legs touch the ground and every other part stacks sensibly above them (legs → robe → head → hat), matching the real villager/witch geo.json\'s own Y ordering', () => {
-    const { model } = HAND_AUTHORED_MOB_TEMPLATES.witch;
-    const [robe, , head, , , , , , , leftLeg, , hatBrim] = model.elements;
-    expect(model.elements.some((el) => el.from[1] === 0)).toBe(true); // legs touch the ground
-    expect(robe.from[1]).toBeGreaterThanOrEqual(leftLeg.from[1]); // robe sits at/above the legs' own base
-    expect(head.from[1]).toBeGreaterThanOrEqual(robe.to[1] - 1); // head sits at/near the robe's top (real geo overlap is small)
-    expect(hatBrim.from[1]).toBeGreaterThanOrEqual(head.from[1]); // hat sits on/above the head, not below it
-  });
-
-  it('witch\'s green center stripe sits flush on the robe\'s own front face, centered in X and spanning most of its height — regression test for direct pixel sampling of the real robe texture finding a genuine, deliberately-painted 2-column-wide green stripe (not noise) that the original single-element flat body had no way to show', () => {
-    const { model } = HAND_AUTHORED_MOB_TEMPLATES.witch;
-    const [robe, stripe] = model.elements;
-    expect(stripe.from[2]).toBeCloseTo(robe.from[2], 5); // flush with the robe's own front
-    const robeCenterX = (robe.from[0] + robe.to[0]) / 2;
-    expect((stripe.from[0] + stripe.to[0]) / 2).toBeCloseTo(robeCenterX, 5); // centered
-    expect(stripe.to[0] - stripe.from[0]).toBeLessThan(robe.to[0] - robe.from[0]); // narrower than the whole robe
-  });
-
-  it('witch\'s arms are 2 segments each (upper arm + forearm) approximating crossed arms — round two, per explicit user request that the base geo.json\'s straight-hanging arms are wrong and this was a hard requirement, not optional. The forearm sits at a real Z strictly in front of the upper arm/robe (bending forward) and reaches toward the body\'s center (bending inward), the same segmented-approximation technique the bee\'s angled-up wings use for a similarly un-rotatable real pose', () => {
-    const { model } = HAND_AUTHORED_MOB_TEMPLATES.witch;
-    const [robe, , , , , leftUpper, rightUpper, leftForearm, rightForearm] = model.elements;
-    for (const [upper, forearm] of [[leftUpper, leftForearm], [rightUpper, rightForearm]] as const) {
-      expect(forearm.from[2]).toBeLessThan(upper.from[2]); // forearm bends forward, in front of the upper arm
-      expect(forearm.from[2]).toBeLessThan(robe.from[2]); // and in front of the robe's own front face
-      expect(forearm.to[1]).toBeCloseTo(upper.from[1], 5); // forearm picks up exactly where the upper arm ends
-    }
-    // Forearms reach toward the center and overlap there, reading as crossed rather than just bent.
-    expect(leftForearm.to[0]).toBeGreaterThan(rightForearm.from[0]);
-  });
-
-  it('witch\'s arms span the full real 16-unit X width (real X -8 to 8) — fits this engine\'s ceiling exactly without needing scaleBounds, confirmed by checking every element\'s bounds stay within 0-16 after normalizeMobModel\'s shift', () => {
-    const { model } = HAND_AUTHORED_MOB_TEMPLATES.witch;
-    let minX = Infinity;
-    let maxX = -Infinity;
-    for (const el of model.elements) {
-      minX = Math.min(minX, el.from[0], el.to[0]);
-      maxX = Math.max(maxX, el.from[0], el.to[0]);
-    }
-    expect(minX).toBe(0);
-    expect(maxX).toBe(16);
-  });
-
-  it('witch\'s robe, stripe, arm plank, and both arm segments are restricted to their requested curated colors (purple for the robe/arms even though real raw color is objectively closer to blue_terracotta — a deliberate override for witch\'s single most iconic real-world trait; green for the stripe) rather than the unrestricted shared palette', () => {
-    const { elementPaletteRestrictions } = HAND_AUTHORED_MOB_TEMPLATES.witch;
-    const robePalette = ['minecraft:purple_terracotta', 'minecraft:purple_concrete', 'minecraft:purple_wool'];
-    for (const i of [0, 4, 5, 6, 7, 8]) {
-      expect(elementPaletteRestrictions?.[i]).toEqual(robePalette); // robe, arm plank, 2 upper arms, 2 forearms
-    }
-    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:blue_terracotta');
-    expect(elementPaletteRestrictions?.[0]).not.toContain('minecraft:blue_concrete');
-    expect(elementPaletteRestrictions?.[1]).toEqual(['minecraft:green_concrete', 'minecraft:lime_concrete']); // stripe
-  });
-
-  it('witch\'s legs are restricted to plain brown tones (not the wood-grain/stone-family scatter their natural per-voxel wrap picked up: dark_oak_log, stripped_dark_oak_log, tuff, andesite, deepslate_tiles, mud all appeared in real-jar verification), and the head is restricted to skin tone plus black/white so the real eyebrow and eye pixels survive instead of being forced into a uniform gray', () => {
-    const { elementPaletteRestrictions } = HAND_AUTHORED_MOB_TEMPLATES.witch;
-    const legPalette = ['minecraft:brown_terracotta', 'minecraft:brown_concrete'];
-    for (const i of [9, 10]) {
-      expect(elementPaletteRestrictions?.[i]).toEqual(legPalette);
-    }
-    const headPalette = elementPaletteRestrictions?.[2];
-    expect(headPalette).toContain('minecraft:packed_mud'); // real skin tone
-    expect(headPalette).toContain('minecraft:black_concrete'); // eyebrow
-    expect(headPalette).toContain('minecraft:white_wool'); // eye
-    expect(headPalette).not.toContain('minecraft:dripstone_block');
-    expect(headPalette).not.toContain('minecraft:dark_oak_log');
-  });
-
-  it('witch\'s hat brim, tier 3, and tip are restricted to plain black, but tier 2 gets its own black+green allow-list instead — regression test for direct pixel sampling finding a genuine symmetric 5×4 diamond of bright green pixels on tier 2 specifically (a real gem, not noise: round one\'s real-jar verification did see stray green there but misread it as noise and restricted it away along with the other, genuinely plain-black, tiers)', () => {
-    const { elementPaletteRestrictions } = HAND_AUTHORED_MOB_TEMPLATES.witch;
-    const hatPalette = ['minecraft:black_concrete', 'minecraft:black_wool', 'minecraft:black_terracotta'];
-    for (const i of [11, 13, 14]) {
-      expect(elementPaletteRestrictions?.[i]).toEqual(hatPalette);
-    }
-    const tier2Palette = elementPaletteRestrictions?.[12];
-    expect(tier2Palette).toEqual(expect.arrayContaining(hatPalette));
-    expect(tier2Palette).toContain('minecraft:green_concrete');
-    expect(elementPaletteRestrictions?.[3]).toBeUndefined(); // nose
   });
 });

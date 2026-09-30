@@ -9,7 +9,7 @@ import type { BuildProgress } from '../lib/structure/buildProgress';
 import { isAbortError } from '../lib/structure/isAbortError';
 import { BuildProgressBar } from './BuildProgressBar';
 import { ChipGrid } from './ui/Panel';
-import { BuildStatus, ErrorNote, HelpText } from './ui/Search';
+import { BuildStatus, ErrorNote } from './ui/Search';
 
 // Fixed, short list sourced entirely from generateTreeGrid.ts's own registry, not from any
 // uploaded-jar map — like MobPicker, tree support doesn't vary per jar, so a simple button row is
@@ -103,12 +103,6 @@ export function TreePicker() {
   return (
     <div className="flex flex-col gap-3">
       <ChipGrid items={TREE_SPECIES_NAMES} selected={state.selectedTreeName} onSelect={selectTree} />
-      <HelpText>
-        Real vanilla logs and leaves, shaped from Minecraft's own tree generation recipes (not a pre-built structure —
-        trees are grown, not blueprinted), so you can build one full-size instead of stacking megablocks by hand. More
-        species coming; the branching ones (acacia, dark oak, jungle, mangrove, cherry) need their own shape work first.
-      </HelpText>
-
       {state.selectedTreeName && <BuildStatus building={isBuilding} name={state.selectedTreeName} />}
       {isBuilding && <BuildProgressBar progress={progress} />}
       {error && <ErrorNote>{error}</ErrorNote>}

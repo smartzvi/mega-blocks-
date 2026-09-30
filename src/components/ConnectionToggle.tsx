@@ -22,15 +22,12 @@ export function ConnectionToggle() {
   if (state.status !== 'ready' || state.mode !== 'item') return null;
   if (state.selectedItemName === null || connectionFamily(state.selectedItemName) === null) return null;
 
-  const hint = OPTIONS.find((o) => o.value === state.connectionMode)?.hint;
-
   return (
     <SegmentedControl
       label="Connections"
       options={OPTIONS.map((o) => ({ value: o.value, label: o.label, title: o.hint }))}
       value={state.connectionMode}
       onChange={(connectionMode) => dispatch({ type: 'CONNECTION_MODE_CHANGED', connectionMode })}
-      hint={hint}
     />
   );
 }

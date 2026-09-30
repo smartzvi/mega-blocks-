@@ -4,7 +4,7 @@ import { buildMobVoxelGrid } from '../lib/models/buildMobVoxelGrid';
 import { HAND_AUTHORED_MOB_TEMPLATES } from '../lib/models/handAuthoredMobTemplates';
 import { loadAndDecodeEntityTexture } from '../lib/zip/decodeTexture';
 import { ChipGrid } from './ui/Panel';
-import { BuildStatus, ErrorNote, HelpText } from './ui/Search';
+import { BuildStatus, ErrorNote } from './ui/Search';
 
 // Fixed, short list (5 mobs) sourced entirely from the hand-authored template registry, not from
 // any uploaded-jar map — unlike ItemPicker/StructurePicker, mob support doesn't vary per jar, so a
@@ -57,12 +57,6 @@ export function MobPicker() {
   return (
     <div className="flex flex-col gap-3">
       <ChipGrid items={MOB_NAMES} selected={state.selectedMobName} onSelect={selectMob} />
-      <HelpText>
-        Hand-authored geometry (real mob shapes aren't shipped as jar data, unlike blocks), voxelized through the same
-        color-matching engine as Item mode. Default texture variant only for now, except the boat (pick its wood) and
-        the minecart on a rail (pick the track piece, including slopes).
-      </HelpText>
-
       {state.selectedMobName && <BuildStatus building={isBuilding} name={state.selectedMobName} />}
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>

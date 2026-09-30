@@ -79,10 +79,6 @@ export function BuildStatus({ building, name, icon }: { building: boolean; name:
   );
 }
 
-export function HelpText({ children }: { children: ReactNode }) {
-  return <p className="text-xs leading-relaxed text-faint">{children}</p>;
-}
-
 export function ErrorNote({ children }: { children: ReactNode }) {
   return <p className="rounded-control border border-danger/30 bg-danger-dim px-3 py-2 text-xs text-danger">{children}</p>;
 }

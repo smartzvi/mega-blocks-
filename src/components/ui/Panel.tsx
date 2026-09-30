@@ -29,11 +29,6 @@ export function QuietButton({ onClick, children, disabled }: { onClick: () => vo
   );
 }
 
-/** A small mono tag, e.g. BETA. */
-export function Tag({ children }: { children: ReactNode }) {
-  return <span className="rounded-[3px] border border-line-strong px-1.5 py-px font-mono text-[10px] uppercase tracking-[0.08em] text-muted">{children}</span>;
-}
-
 /** A pick-one grid of buttons (mobs, trees) — for short, fixed lists that don't need a search. */
 export function ChipGrid<T extends string>({ items, selected, onSelect }: { items: readonly T[]; selected: T | null; onSelect: (item: T) => void }) {
   return (

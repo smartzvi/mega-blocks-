@@ -5,7 +5,7 @@ import { itemConnectionProperties } from '../lib/models/itemConnections';
 import { railShapeProperties } from '../lib/models/railTemplates';
 import { leverPoweredProperties } from '../lib/models/leverTemplate';
 import { loadAndDecodeEntityTexture, loadAndDecodeTexture } from '../lib/zip/decodeTexture';
-import { BuildStatus, ErrorNote, HelpText, ResultItem, ResultList, SearchField } from './ui/Search';
+import { BuildStatus, ErrorNote, ResultItem, ResultList, SearchField } from './ui/Search';
 
 export function ItemPicker() {
   const state = useAppState();
@@ -138,13 +138,6 @@ export function ItemPicker() {
           </ResultList>
         )}
       </div>
-      <HelpText>
-        Voxelized from the block's real 3D model, not its flat texture. Most simple JSON-model blocks work. Pick a
-        fence, pane, bars, wall or redstone wire and a control appears to show it connected or isolated; pick a rail
-        and a control appears to pick its shape, including sloped ascending rails; pick a lever and a control appears
-        to toggle it powered on or off.
-      </HelpText>
-
       {state.selectedItemName && <BuildStatus building={isBuilding} name={state.selectedItemName} />}
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
