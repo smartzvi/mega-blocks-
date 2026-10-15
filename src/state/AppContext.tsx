@@ -39,6 +39,8 @@ export interface AppState {
   railShape: RailShape;
   leverPowered: boolean;
   boatWood: BoatWood;
+  /** Trees mode: keep only the canopy's outside skin of leaves (see lib/trees/hollowLeaves.ts). */
+  hollowLeaves: boolean;
   mode: AppMode;
   selectedItemName: string | null;
   itemVoxelGrid: VoxelGrid | null;
@@ -69,6 +71,7 @@ const initialState: AppState = {
   railShape: 'north_south', // must match railTemplates.ts's own DEFAULT_RAIL_SHAPE
   leverPowered: false, // must match leverTemplate.ts's own DEFAULT_LEVER_POWERED
   boatWood: 'oak', // must match boatTemplates.ts's own DEFAULT_BOAT_WOOD
+  hollowLeaves: false,
   mode: 'block',
   selectedItemName: null,
   itemVoxelGrid: null,
@@ -102,6 +105,7 @@ export type AppAction =
   | { type: 'RAIL_SHAPE_CHANGED'; railShape: RailShape }
   | { type: 'LEVER_POWERED_CHANGED'; leverPowered: boolean }
   | { type: 'BOAT_WOOD_CHANGED'; boatWood: BoatWood }
+  | { type: 'HOLLOW_LEAVES_CHANGED'; hollowLeaves: boolean }
   | { type: 'MODE_CHANGED'; mode: AppMode }
   | { type: 'ITEM_VOXELIZING'; itemName: string }
   | { type: 'ITEM_VOXELIZED'; itemVoxelGrid: VoxelGrid }
@@ -125,6 +129,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         railShape: state.railShape,
         leverPowered: state.leverPowered,
         boatWood: state.boatWood,
+        hollowLeaves: state.hollowLeaves,
         mode: state.mode,
       };
     case 'ARCHIVE_LOADED':
@@ -151,6 +156,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         railShape: state.railShape,
         leverPowered: state.leverPowered,
         boatWood: state.boatWood,
+        hollowLeaves: state.hollowLeaves,
         mode: state.mode,
       };
     case 'PALETTE_BUILT':
@@ -186,6 +192,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, leverPowered: action.leverPowered, itemVoxelGrid: null };
     case 'BOAT_WOOD_CHANGED':
       return { ...state, boatWood: action.boatWood, mobVoxelGrid: null };
+    case 'HOLLOW_LEAVES_CHANGED':
+      return { ...state, hollowLeaves: action.hollowLeaves, treeVoxelGrid: null };
     case 'MODE_CHANGED':
       return { ...state, mode: action.mode };
     case 'ITEM_VOXELIZING':

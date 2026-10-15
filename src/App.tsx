@@ -10,6 +10,7 @@ import { ConnectionToggle } from './components/ConnectionToggle';
 import { RailShapeToggle } from './components/RailShapeToggle';
 import { LeverPoweredToggle } from './components/LeverPoweredToggle';
 import { BoatWoodToggle } from './components/BoatWoodToggle';
+import { HollowLeavesToggle } from './components/HollowLeavesToggle';
 import { ItemPicker } from './components/ItemPicker';
 import { StructurePicker } from './components/StructurePicker';
 import { MobPicker } from './components/MobPicker';
@@ -49,6 +50,7 @@ function SetupPanel() {
               <RailShapeToggle />
             </>
           )}
+          {state.mode === 'trees' && <HollowLeavesToggle />}
         </div>
       </div>
     </section>

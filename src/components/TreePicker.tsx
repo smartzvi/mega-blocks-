@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAppDispatch, useAppState } from '../state/AppContext';
 import { generateTreeGrid, TREE_SPECIES_NAMES, type TreeSpecies } from '../lib/trees/generateTreeGrid';
+import { hollowLeafInterior } from '../lib/trees/hollowLeaves';
 import { cullInteriorVoxels } from '../lib/structure/cullInteriorVoxels';
 import { buildStructureVoxelGrid } from '../lib/structure/buildStructureVoxelGrid';
 import { loadAndDecodeEntityTexture, loadAndDecodeTexture } from '../lib/zip/decodeTexture';
@@ -42,6 +43,7 @@ export function TreePicker() {
     }
     const treeName = state.selectedTreeName as TreeSpecies;
     const palette = state.palette;
+    const hollowLeaves = state.hollowLeaves;
     let cancelled = false;
     const controller = new AbortController();
 
@@ -65,7 +67,11 @@ export function TreePicker() {
             buildStructureVoxelGrid(culled, blockIds, palette, decodeTexture, state.blockStateFiles!, state.modelFiles!, state.resolution, onProgress)
         );
 
-        if (!cancelled) dispatch({ type: 'TREE_VOXELIZED', treeVoxelGrid: voxelGrid });
+        // Hollow canopy: a pass over the finished grid, using the *unculled* block grid so a leaf
+        // block buried inside the canopy still counts as a neighbour (see hollowLeaves.ts).
+        const finalGrid = hollowLeaves ? hollowLeafInterior(voxelGrid, rawGrid, state.resolution) : voxelGrid;
+
+        if (!cancelled) dispatch({ type: 'TREE_VOXELIZED', treeVoxelGrid: finalGrid });
       } catch (err) {
         if (isAbortError(err)) return; // superseded by a newer selection — not a failure
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -84,6 +90,7 @@ export function TreePicker() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     state.selectedTreeName,
+    state.hollowLeaves,
     state.resolution,
     state.archiveFile,
     state.palette,
