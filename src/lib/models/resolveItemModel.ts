@@ -87,20 +87,9 @@ export function reshapeCactus(elements: BlockModelElement[]): BlockModelElement[
     const isFullBox = el.from.every((v) => v === 0) && el.to.every((v) => v === 16);
 
     if (isFullBox && names.every((f) => f === 'top' || f === 'bottom')) {
-      // The caps are one model unit thick, which is several voxels at 32³ and up. Only a thick box's
-      // outer layers get filled, so its edge faces need a texture of their own or the rim shows as a
-      // hollow gap between cap and wall. The rim takes the side texture's own top / bottom pixel row
-      // (the dark lip the real cactus has), and the box is the cap texture's opaque 14x14 centre —
-      // its outermost pixel is transparent — so it lines up with the walls instead of overhanging.
       const caps: BlockModelElement[] = [];
-      const rim = (row: number) => ({ uv: [1, row, 15, row + 1] as [number, number, number, number], texture: '#side' });
-      const centre = (face: NonNullable<BlockModelElement['faces']['top']>) => ({ ...face, uv: [1, 1, 15, 15] as [number, number, number, number] });
-      if (el.faces.top) {
-        caps.push({ from: [1, 15, 1], to: [15, 16, 15], faces: { top: centre(el.faces.top), north: rim(0), south: rim(0), west: rim(0), east: rim(0) } });
-      }
-      if (el.faces.bottom) {
-        caps.push({ from: [1, 0, 1], to: [15, 1, 15], faces: { bottom: centre(el.faces.bottom), north: rim(15), south: rim(15), west: rim(15), east: rim(15) } });
-      }
+      if (el.faces.top) caps.push({ from: [0, 15, 0], to: [16, 16, 16], faces: { top: el.faces.top } });
+      if (el.faces.bottom) caps.push({ from: [0, 0, 0], to: [16, 1, 16], faces: { bottom: el.faces.bottom } });
       return caps;
     }
 
