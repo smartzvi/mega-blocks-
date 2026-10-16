@@ -62,6 +62,55 @@ export function dropBarsCapBoxes(elements: BlockModelElement[]): BlockModelEleme
   });
 }
 
+/** The cactus block model (`block/cactus`). */
+const CACTUS_MODEL = /(^|[:/])cactus$/;
+
+/**
+ * The real cactus model is built from faces, not volumes: a full 16x16x16 box carrying only a top
+ * and a bottom face, plus two side plates inset one unit from the edges (`[0,0,1]-[16,16,15]` with
+ * north and south faces, `[1,0,0]-[15,16,16]` with west and east faces). This engine fills every
+ * element's whole box, so those became a solid cube with no side texture of its own that buried the
+ * plates (a face against a filled neighbour is hidden) — and the two plates, filled, buried each
+ * other. All that survived were a few rows of spine pixels: a stack of thin rings, not a cactus.
+ *
+ * This rebuilds the same faces as thin boxes: the full box becomes a one-unit top cap and bottom
+ * cap, and each plate becomes one one-unit slab per face, standing exactly where that face is. The
+ * visible faces, their textures and the plus-shaped cross-section (spines poking out at the
+ * corners) are the game's own.
+ *
+ * Deliberately limited to the cactus model — see the note on dropBarsCapBoxes about this file's
+ * blast radius; other blocks with a faces-only box rely on the current fill behaviour.
+ */
+export function reshapeCactus(elements: BlockModelElement[]): BlockModelElement[] {
+  return elements.flatMap((el): BlockModelElement[] => {
+    const names = Object.keys(el.faces);
+    const isFullBox = el.from.every((v) => v === 0) && el.to.every((v) => v === 16);
+
+    if (isFullBox && names.every((f) => f === 'top' || f === 'bottom')) {
+      const caps: BlockModelElement[] = [];
+      if (el.faces.top) caps.push({ from: [0, 15, 0], to: [16, 16, 16], faces: { top: el.faces.top } });
+      if (el.faces.bottom) caps.push({ from: [0, 0, 0], to: [16, 1, 16], faces: { bottom: el.faces.bottom } });
+      return caps;
+    }
+
+    const [x0, y0, z0] = el.from;
+    const [x1, y1, z1] = el.to;
+    if (names.length === 2 && el.faces.north && el.faces.south) {
+      return [
+        { from: [x0, y0, z0], to: [x1, y1, z0 + 1], faces: { north: el.faces.north } },
+        { from: [x0, y0, z1 - 1], to: [x1, y1, z1], faces: { south: el.faces.south } },
+      ];
+    }
+    if (names.length === 2 && el.faces.west && el.faces.east) {
+      return [
+        { from: [x0, y0, z0], to: [x0 + 1, y1, z1], faces: { west: el.faces.west } },
+        { from: [x1 - 1, y0, z0], to: [x1, y1, z1], faces: { east: el.faces.east } },
+      ];
+    }
+    return [el];
+  });
+}
+
 /** Vanilla applies a variant's "x" rotation before its "y" rotation when both are present (real
  *  case: a `half=top` stair combines `x: 180` with a facing-driven `y`) — matching that order here
  *  matters, since rotating a non-cube element around Y first then X (or the reverse) generally
@@ -69,7 +118,11 @@ export function dropBarsCapBoxes(elements: BlockModelElement[]): BlockModelEleme
 async function resolveSingleRef(ref: BlockStateModelRef, modelFiles: FileLoaderMap): Promise<BlockModel> {
   const modelKey = texturePathToKey(ref.model);
   const model = await resolveModelFile(modelKey, modelFiles);
-  const source = BARS_PART_MODEL.test(ref.model) ? dropBarsCapBoxes(model.elements) : model.elements;
+  const source = BARS_PART_MODEL.test(ref.model)
+    ? dropBarsCapBoxes(model.elements)
+    : CACTUS_MODEL.test(ref.model)
+      ? reshapeCactus(model.elements)
+      : model.elements;
   let elements = source.map((el) => rotateElementY(rotateElementX(el, ref.x), ref.y));
   if (REDSTONE_DUST_PART_MODEL.test(ref.model) && ref.y !== 0) elements = elements.map((el) => turnFlatFaceTextures(el, ref.y));
   return { elements, textures: model.textures };
