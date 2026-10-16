@@ -15,12 +15,15 @@ describe('reshapeCactus', () => {
   const northSouth: BlockModelElement = { from: [0, 0, 1], to: [16, 16, 15], faces: { north: face, south: face } };
   const westEast: BlockModelElement = { from: [1, 0, 0], to: [15, 16, 16], faces: { west: face, east: face } };
 
-  it('turns the faces-only full box into a one-unit top cap and bottom cap', () => {
+  it('turns the faces-only full box into a one-unit top cap and bottom cap with a textured rim', () => {
     const [top, bottom] = reshapeCactus([box]);
-    expect(top).toMatchObject({ from: [0, 15, 0], to: [16, 16, 16] });
-    expect(Object.keys(top.faces)).toEqual(['top']);
-    expect(bottom).toMatchObject({ from: [0, 0, 0], to: [16, 1, 16] });
-    expect(Object.keys(bottom.faces)).toEqual(['bottom']);
+    // The opaque 14x14 centre of the cap texture, with the side texture's top / bottom row as its rim.
+    expect(top).toMatchObject({ from: [1, 15, 1], to: [15, 16, 15] });
+    expect(top.faces.top?.uv).toEqual([1, 1, 15, 15]);
+    expect(top.faces.north).toMatchObject({ uv: [1, 0, 15, 1], texture: '#side' });
+    expect(bottom).toMatchObject({ from: [1, 0, 1], to: [15, 1, 15] });
+    expect(bottom.faces.bottom?.uv).toEqual([1, 1, 15, 15]);
+    expect(bottom.faces.west).toMatchObject({ uv: [1, 15, 15, 16], texture: '#side' });
   });
 
   it('splits each side plate into one one-unit slab per face, standing where that face is', () => {
@@ -70,4 +73,31 @@ describe.skipIf(!hasRealJar())(`cactus (real jar: ${REAL_JAR_PATH})`, () => {
     });
     expect(spines).toBeLessThan(grid.voxels.size * 0.3);
   }, 60000);
+
+  it('has no gap between its caps and its walls at any resolution the app offers', async () => {
+    const archive = await loadRealArchive();
+    const palette = buildPalette(await extractTextures(archive));
+    const decode = async (k: string) => (await loadAndDecodeTexture(k, archive.blockTextureFiles)) ?? loadAndDecodeEntityTexture(k, archive.entityTextureFiles);
+
+    for (const res of [16, 32, 48, 64]) {
+      const grid = await buildItemVoxelGrid('cactus', archive.blockStateFiles, archive.modelFiles, decode, palette, res, {});
+      const mid = Math.floor(res / 2);
+      // Looking from the north side at the middle of the cactus, every height must show something at
+      // the wall (the first couple of voxels in from the edge) — a hollow cap used to leave empty rows
+      // at the top and bottom once a cap was more than one voxel thick.
+      for (let y = 0; y < res; y++) {
+        let found = false;
+        for (let z = 0; z <= Math.ceil(res / 8); z++) if (getVoxel(grid, mid, y, z) !== null) found = true;
+        expect(found, `res ${res}: no wall voxel at y=${y}`).toBe(true);
+      }
+      // And the rim runs unbroken along the same side at the top and bottom cap rows.
+      for (const y of [0, res - 1]) {
+        for (let x = Math.ceil(res / 8); x < res - Math.ceil(res / 8); x++) {
+          let found = false;
+          for (let z = 0; z <= Math.ceil(res / 8); z++) if (getVoxel(grid, x, y, z) !== null) found = true;
+          expect(found, `res ${res}: rim gap at x=${x}, y=${y}`).toBe(true);
+        }
+      }
+    }
+  }, 180000);
 });
